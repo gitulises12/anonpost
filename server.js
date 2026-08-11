@@ -1379,9 +1379,19 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
 
 // ==================== CHAT PÚBLICO GLOBAL ====================
 
+// Minutos de inactividad tras los cuales el chat se limpia solo
+const CHAT_INACTIVITY_MS = 10 * 60 * 1000;
+
 // Obtener los últimos mensajes del chat
 app.get('/api/chat', async (req, res) => {
   try {
+    // Auto-limpieza: si el mensaje más reciente tiene más de 10 min, se borra todo el chat
+    const newest = await Message.findOne().sort({ createdAt: -1 }).select('createdAt');
+    if (newest && (Date.now() - new Date(newest.createdAt).getTime()) > CHAT_INACTIVITY_MS) {
+      await Message.deleteMany({});
+      return res.json([]);
+    }
+
     const messages = await Message.find()
       .populate('userId', 'username role')
       .sort({ createdAt: -1 })
