@@ -932,7 +932,7 @@ app.post('/api/posts', upload.array('images', 5), async (req, res) => {
     if (user.role !== 'superadmin') {
       const activePosts = await Post.countDocuments({ userId });
       if (activePosts >= 3) {
-        return res.status(400).json({ error: 'Solo puedes tener 3 publicaciones activas al mismo tiempo. Espera a que alguna expire (duran 1 hora).' });
+        return res.status(400).json({ error: 'Solo puedes tener 3 publicaciones activas al mismo tiempo. Espera a que alguna expire (duran 3 horas).' });
       }
     }
 
@@ -985,15 +985,15 @@ app.post('/api/posts', upload.array('images', 5), async (req, res) => {
     }
     
     // Crear nueva publicación
-    // Los posts expiran (se borran solos) 1 hora después de crearse
-    const ONE_HOUR = 60 * 60 * 1000;
+    // Los posts expiran (se borran solos) 3 horas después de crearse
+    const THREE_HOURS = 3 * 60 * 60 * 1000;
     const newPost = new Post({
       title: filteredTitle,
       description: filteredDescription,
       images: images,
       userId: userId,
       isNSFW: hasNSFWContent,
-      expiresAt: new Date(Date.now() + ONE_HOUR)
+      expiresAt: new Date(Date.now() + THREE_HOURS)
     });
     
     const savedPost = await newPost.save();
@@ -1161,11 +1161,11 @@ app.post('/api/posts/:postId/pin', requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Publicación no encontrada' });
     }
     post.pinned = !post.pinned;
-    // Al fijar, el post deja de expirar; al desfijar, vuelve a durar 1 hora
+    // Al fijar, el post deja de expirar; al desfijar, vuelve a durar 3 horas
     if (post.pinned) {
       post.expiresAt = null;
     } else {
-      post.expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+      post.expiresAt = new Date(Date.now() + 3 * 60 * 60 * 1000);
     }
     await post.save();
     res.json({ message: post.pinned ? 'Publicación fijada (ya no expira)' : 'Publicación desfijada', pinned: post.pinned });
