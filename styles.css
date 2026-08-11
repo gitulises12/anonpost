@@ -1132,3 +1132,17 @@ img, video { max-width: 100%; height: auto; }
     margin-bottom: 4px;
     padding-left: 2px;
 }
+
+
+/* Advertencia de no usar nombre real (formulario de registro) */
+.name-warning {
+    background: rgba(244, 208, 63, 0.1);
+    border: 1px solid rgba(212, 175, 55, 0.4);
+    color: #f4d03f;
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 12px 14px;
+    border-radius: 10px;
+    margin-bottom: 18px;
+}
+.name-warning strong { color: #ffd94a; }

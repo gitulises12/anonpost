@@ -337,13 +337,67 @@ async function generateUniqueAccessCode() {
 // Función para filtrar contenido ofensivo
 function filterOffensiveContent(text) {
   let filteredText = text.toLowerCase();
-  
+
   offensiveWords.forEach(word => {
     const regex = new RegExp(`\\b${word}\\b`, 'gi');
     filteredText = filteredText.replace(regex, '*'.repeat(word.length));
   });
-  
+
   return filteredText;
+}
+
+// ==================== FILTRO DE NOMBRES REALES ====================
+// Nombres de pila latinos comunes (para impedir que la gente use su nombre real)
+const realFirstNames = [
+  'juan','jose','luis','carlos','jorge','miguel','manuel','francisco','pedro','angel',
+  'antonio','rafael','fernando','ricardo','roberto','eduardo','javier','sergio','alberto','daniel',
+  'david','diego','alejandro','andres','pablo','mario','oscar','victor','hugo','raul',
+  'ramon','ivan','gabriel','marcos','enrique','felipe','gustavo','arturo','emmanuel','cristian',
+  'cesar','esteban','gerardo','ignacio','isaac','joaquin','leonardo','lorenzo','mateo','maximiliano',
+  'nicolas','ruben','salvador','santiago','sebastian','tomas','ulises','vicente','walter','wilmer',
+  'maria','ana','guadalupe','juana','margarita','veronica','rosa','francisca','gabriela','patricia',
+  'laura','elizabeth','carmen','leticia','teresa','sofia','isabel','alejandra','fernanda','daniela',
+  'andrea','paola','carolina','claudia','diana','elena','fabiola','graciela','irene','jimena',
+  'karla','lucia','mariana','martha','monica','natalia','norma','raquel','sandra','valeria',
+  'valentina','ximena','yolanda','adriana','beatriz','camila','cecilia','cristina','dolores','esperanza',
+  'guillermo','hector','humberto','alfredo','armando','benjamin','emilio','ernesto','federico','gonzalo'
+];
+// Apellidos latinos comunes
+const realLastNames = [
+  'garcia','rodriguez','martinez','hernandez','lopez','gonzalez','perez','sanchez','ramirez','cruz',
+  'flores','gomez','morales','vazquez','vasquez','reyes','jimenez','torres','diaz','gutierrez',
+  'ruiz','mendoza','aguilar','ortiz','moreno','castillo','romero','alvarez','mendez','ramos',
+  'herrera','medina','castro','vargas','guzman','fernandez','rojas','navarro','dominguez','velazquez',
+  'salazar','contreras','santos','rivera','nunez','espinoza','ortega','delgado','cortes','estrada',
+  'pena','rios','molina','silva','avila','campos','carrillo','cabrera','figueroa','fuentes',
+  'guerrero','juarez','leon','luna','marquez','miranda','padilla','pacheco','rincon','sandoval',
+  'soto','trejo','valencia','vega','zamora','acosta','aguirre','bautista','barrera','benitez',
+  'cardenas','cervantes','chavez','duran','escobar','galvan','ibarra','lara','maldonado','montes',
+  'oliva','olivares','palacios','quintero','robles','salas','serrano','tapia','tovar','villanueva'
+];
+
+// Detecta si un nombre de usuario parece un nombre real (nombre, apellido o combinación)
+function looksLikeRealName(username) {
+  const norm = username
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // quitar acentos
+    .replace(/[^a-z]/g, '');                            // solo letras
+  if (!norm || norm.length < 3) return false;
+
+  const isName = (w) => realFirstNames.includes(w) || realLastNames.includes(w);
+
+  // Coincidencia exacta con un nombre o apellido
+  if (isName(norm)) return true;
+
+  // Combinación de dos partes: nombre+apellido, apellido+nombre, etc. (concatenados)
+  const parts = [...realFirstNames, ...realLastNames];
+  for (const p of parts) {
+    if (norm.startsWith(p) && norm.length > p.length) {
+      const rest = norm.slice(p.length);
+      if (isName(rest)) return true; // ej: "juanperez", "perezgomez", "juancarlos"
+    }
+  }
+  return false;
 }
 
 // Función para detectar contenido NSFW en imágenes
@@ -374,7 +428,12 @@ app.post('/api/users', async (req, res) => {
     if (!username) {
       return res.status(400).json({ error: 'El username es requerido' });
     }
-    
+
+    // Impedir nombres reales (nombre, apellido o combinación de ellos)
+    if (looksLikeRealName(username)) {
+      return res.status(400).json({ error: '⚠️ No uses tu nombre real. Elige un apodo o nombre inventado para mantener el anonimato.' });
+    }
+
     // Filtrar contenido ofensivo en el username
     const filteredUsername = filterOffensiveContent(username);
     

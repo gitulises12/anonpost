@@ -182,12 +182,16 @@
                         <h2>Crear Cuenta</h2>
                         <p class="auth-description">Elige un nombre de usuario para comenzar</p>
                     </div>
-                    
+
+                    <div class="name-warning">
+                        ⚠️ <strong>Advertencia:</strong> No uses tu nombre real. Elige un apodo o nombre inventado para mantener tu anonimato.
+                    </div>
+
                     <form id="createUserForm">
                         <div class="form-group">
                             <label for="username">Nombre de Usuario:</label>
                             <input type="text" id="username" name="username" placeholder="Tu alias o nickname..." maxlength="30" minlength="3" required>
-                            <small class="input-help">Entre 3 y 30 caracteres. Puede ser tu alias o nickname.</small>
+                            <small class="input-help">Entre 3 y 30 caracteres. Nada de nombres reales.</small>
                         </div>
                         
                         <div id="userErrorMessage" class="error-message hidden"></div>
