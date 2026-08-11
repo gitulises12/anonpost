@@ -945,3 +945,152 @@ body {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.3; transform: scale(0.8); }
 }
+
+
+/* ==================================================================== */
+/* ============  RESPONSIVIDAD TOTAL + PULIDO ESTÉTICO  =============== */
+/* ==================================================================== */
+
+/* Evitar scroll horizontal en cualquier dispositivo */
+html, body { overflow-x: hidden; max-width: 100%; }
+img, video { max-width: 100%; height: auto; }
+
+/* ---- Header: barra de acciones ordenada ---- */
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+.current-user {
+    font-weight: 700;
+    font-size: 14px;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.logout-btn {
+    background: transparent;
+    color: #71767b;
+    border: 1px solid #333333;
+    border-radius: 20px;
+    padding: 8px 14px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    white-space: nowrap;
+}
+.logout-btn:hover { background: #333333; color: #ffffff; }
+
+/* Botones del header un poco más consistentes */
+.admin-panel-btn, .new-post-btn, .logout-btn { white-space: nowrap; }
+
+/* ---- Pulido general de tarjetas ---- */
+.post-card {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.post-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+}
+.post-actions { flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* La cabecera del feed: título a la izquierda, "En vivo" a la derecha */
+.post-list-header {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* ==================== TABLET (≤768px) ==================== */
+@media (max-width: 768px) {
+    .post-list-header { flex-direction: row; align-items: center; }
+
+    /* Panel de admin: hoja casi completa */
+    .admin-panel-content { width: 96vw; max-height: 90vh; }
+    .admin-tray-title { max-width: 46vw; }
+}
+
+/* ==================== MÓVIL (≤600px) ==================== */
+@media (max-width: 600px) {
+    /* Header compacto: botones como iconos para que quepan */
+    .header-content { gap: 8px; height: 56px; }
+    .header-actions { gap: 6px; }
+    .current-user { max-width: 90px; font-size: 13px; }
+
+    .admin-panel-btn {
+        padding: 8px 10px;
+        font-size: 0;
+        border-radius: 50%;
+        width: 38px;
+        height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .admin-panel-btn::before { content: '👑'; font-size: 16px; }
+
+    .new-post-btn {
+        padding: 8px 10px;
+        font-size: 0;
+        border-radius: 50%;
+        width: 38px;
+        height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .new-post-btn::before { content: '✏️'; font-size: 15px; }
+
+    .logout-btn {
+        padding: 8px 10px;
+        font-size: 0;
+        border-radius: 50%;
+        width: 38px;
+        height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .logout-btn::before { content: '🚪'; font-size: 15px; }
+
+    /* Panel de admin como hoja inferior a pantalla completa */
+    .admin-panel-modal { align-items: flex-end; }
+    .admin-panel-content {
+        width: 100vw;
+        max-height: 92vh;
+        height: 92vh;
+        border-radius: 20px 20px 0 0;
+        border-left: none;
+        border-right: none;
+        border-bottom: none;
+    }
+    .admin-panel-header { padding: 16px 18px; }
+    .admin-panel-body { padding: 16px 16px 32px; }
+    .admin-stat-card { padding: 12px 6px; }
+    .admin-stat-num { font-size: 20px; }
+    .admin-stat-label { font-size: 11px; }
+    .admin-tray-item, .admin-user-item { flex-wrap: wrap; }
+    .admin-tray-title { max-width: 100%; white-space: normal; }
+
+    /* Controles de admin en el post: fila completa abajo */
+    .post-admin-actions { margin-left: 0; margin-top: 8px; width: 100%; }
+    .admin-edit-btn, .admin-pin-btn, .admin-delete-btn { flex: 1; text-align: center; }
+
+    /* Modal de edición ocupa mejor la pantalla */
+    .admin-edit-content { width: 94vw; padding: 18px; }
+
+    /* Menú de 3 puntitos: un poco más grande para el dedo */
+    .post-menu-btn { padding: 4px 10px; font-size: 22px; }
+    .post-menu-dropdown { min-width: 210px; }
+    .post-menu-option { padding: 14px 16px; }
+}
+
+/* ==================== MÓVIL PEQUEÑO (≤380px) ==================== */
+@media (max-width: 380px) {
+    .current-user { display: none; }  /* Ocultar nombre para ganar espacio */
+    .logo { font-size: 18px; }
+    .admin-panel-btn, .new-post-btn, .logout-btn { width: 36px; height: 36px; }
+}
