@@ -1368,3 +1368,42 @@ img, video { max-width: 100%; height: auto; }
     .chat-content { width: 100vw; height: 100vh; max-height: 100vh; border-radius: 0; border: none; }
     .chat-fab { bottom: 16px; right: 16px; width: 54px; height: 54px; }
 }
+
+
+/* ==================== CHAT: RESPONDER (deslizar tipo WhatsApp) ==================== */
+
+/* Permite scroll vertical nativo pero deja el gesto horizontal para responder */
+.chat-msg { touch-action: pan-y; position: relative; user-select: none; }
+.chat-msg.drag-reply-ready { box-shadow: -4px 0 0 0 #1d9bf0 inset; }
+
+/* Cita (mensaje al que se responde) dentro de un mensaje */
+.chat-quote {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    border-left: 3px solid #1d9bf0;
+    background: rgba(29, 155, 240, 0.08);
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin-bottom: 6px;
+}
+.chat-quote-author { font-size: 12px; font-weight: 700; color: #1d9bf0; }
+.chat-quote-text { font-size: 12px; color: #8b98a5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Barra "Respondiendo a..." encima del input */
+.chat-reply-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 14px;
+    background: #000000;
+    border-top: 1px solid #333333;
+    border-left: 3px solid #1d9bf0;
+}
+.chat-reply-bar.hidden { display: none; }
+.chat-reply-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.chat-reply-to { font-size: 12px; font-weight: 700; color: #1d9bf0; }
+.chat-reply-preview { font-size: 12px; color: #8b98a5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-reply-cancel { background: none; border: none; color: #71767b; cursor: pointer; font-size: 14px; flex-shrink: 0; }
+.chat-reply-cancel:hover { color: #fff; }

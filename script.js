@@ -4627,6 +4627,8 @@ function escapeHtml(str) {
 
 let chatPollTimer = null;
 let lastChatSignature = '';
+let chatReplyTo = null;        // id del mensaje al que se está respondiendo
+let chatMessagesById = {};     // cache de mensajes para la vista de respuesta
 
 function openChat() {
     if (!currentUser) { showError('Debes iniciar sesión para chatear'); return; }
@@ -4645,6 +4647,7 @@ function openChat() {
                 <button class="chat-close" onclick="closeChat()">✖️</button>
             </div>
             <div class="chat-messages" id="chatMessages"><p class="chat-loading">Cargando...</p></div>
+            <div id="chatReplyBar" class="chat-reply-bar hidden"></div>
             <div class="chat-input-row">
                 <input id="chatInput" class="chat-input" type="text" maxlength="500" placeholder="Escribe un mensaje..."
                     onkeydown="if(event.key==='Enter'){event.preventDefault();sendChatMessage();}">
@@ -4655,7 +4658,9 @@ function openChat() {
     modal.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
     lastChatSignature = '';
+    chatReplyTo = null;
     loadChatMessages(true);
+    setupChatDrag();
     // Polling cada 3 segundos mientras el chat esté abierto
     if (chatPollTimer) clearInterval(chatPollTimer);
     chatPollTimer = setInterval(loadChatMessages, 3000);
@@ -4689,13 +4694,22 @@ async function loadChatMessages(force = false) {
             box.innerHTML = '<p class="chat-empty">Aún no hay mensajes. ¡Escribe el primero! 👋</p>';
             return;
         }
+        chatMessagesById = {};
         box.innerHTML = messages.map(m => {
             const isSuper = m.userId && m.userId.role === 'superadmin';
             const name = m.userId && m.userId.username ? m.userId.username : 'Usuario eliminado';
             const mine = currentUser && m.userId && m.userId._id === currentUser._id;
             const del = isSuperUser() ? `<button class="chat-del" onclick="deleteChatMessage('${m._id}')" title="Borrar">🗑️</button>` : '';
+            chatMessagesById[m._id] = { author: name, content: m.content };
+            // Cita del mensaje al que responde (tipo WhatsApp)
+            const quote = (m.replyTo && m.replyTo.author) ? `
+                <div class="chat-quote">
+                    <span class="chat-quote-author">@${escapeHtml(m.replyTo.author)}</span>
+                    <span class="chat-quote-text">${escapeHtml((m.replyTo.content || '').substring(0, 120))}</span>
+                </div>` : '';
             return `
-                <div class="chat-msg ${mine ? 'mine' : ''}">
+                <div class="chat-msg ${mine ? 'mine' : ''}" data-msg-id="${m._id}">
+                    ${quote}
                     <div class="chat-msg-head">
                         <span class="chat-msg-author ${isSuper ? 'superadmin-name' : ''}">${isSuper ? '👑 ' : ''}@${escapeHtml(name)}</span>
                         <span class="chat-msg-time" data-created="${m.createdAt}">${formatDate(m.createdAt)}</span>
@@ -4710,18 +4724,85 @@ async function loadChatMessages(force = false) {
     } catch (e) { /* silencioso */ }
 }
 
+// Configura el gesto de "arrastrar para responder" (dedo o mouse) sobre los mensajes
+function setupChatDrag() {
+    const box = document.getElementById('chatMessages');
+    if (!box || box.dataset.dragReady) return;
+    box.dataset.dragReady = '1';
+    let el = null, startX = 0, startY = 0, committed = false, active = false;
+
+    box.addEventListener('pointerdown', (e) => {
+        const t = e.target.closest('.chat-msg');
+        if (!t || e.target.closest('button')) return;
+        el = t; startX = e.clientX; startY = e.clientY; committed = false; active = true;
+        el.style.transition = 'none';
+    });
+    box.addEventListener('pointermove', (e) => {
+        if (!active || !el) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        if (!committed) {
+            if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8) { // el usuario está haciendo scroll vertical
+                active = false; el.style.transform = ''; return;
+            }
+            if (dx > 8) committed = true; else return;
+        }
+        const d = Math.max(0, Math.min(90, dx)); // solo derecha, con tope
+        el.style.transform = `translateX(${d}px)`;
+        el.classList.toggle('drag-reply-ready', d > 55);
+    });
+    const end = (e) => {
+        if (!active || !el) return;
+        const dx = (e.clientX || 0) - startX;
+        el.style.transition = 'transform 0.2s';
+        el.style.transform = '';
+        el.classList.remove('drag-reply-ready');
+        if (committed && dx > 55) startReply(el.getAttribute('data-msg-id'));
+        active = false; committed = false; el = null;
+    };
+    box.addEventListener('pointerup', end);
+    box.addEventListener('pointercancel', end);
+}
+
+function startReply(id) {
+    const m = chatMessagesById[id];
+    if (!m) return;
+    chatReplyTo = id;
+    const bar = document.getElementById('chatReplyBar');
+    if (bar) {
+        bar.innerHTML = `
+            <div class="chat-reply-info">
+                <span class="chat-reply-to">↩️ Respondiendo a @${escapeHtml(m.author)}</span>
+                <span class="chat-reply-preview">${escapeHtml((m.content || '').substring(0, 80))}</span>
+            </div>
+            <button class="chat-reply-cancel" onclick="cancelReply()" title="Cancelar">✖️</button>
+        `;
+        bar.classList.remove('hidden');
+    }
+    const input = document.getElementById('chatInput');
+    if (input) input.focus();
+}
+
+function cancelReply() {
+    chatReplyTo = null;
+    const bar = document.getElementById('chatReplyBar');
+    if (bar) { bar.classList.add('hidden'); bar.innerHTML = ''; }
+}
+
 async function sendChatMessage() {
     if (!currentUser) return;
     const input = document.getElementById('chatInput');
     if (!input) return;
     const content = input.value.trim();
     if (!content) return;
+    const replyToId = chatReplyTo;
     input.value = '';
+    cancelReply();
     try {
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: currentUser._id, content })
+            body: JSON.stringify({ userId: currentUser._id, content, replyToId })
         });
         let data = {};
         try { data = await response.json(); } catch (e) {}

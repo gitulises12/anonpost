@@ -270,6 +270,11 @@ const messageSchema = new mongoose.Schema({
     required: true,
     maxlength: 500
   },
+  // Snapshot del mensaje al que se responde (para mostrar la cita tipo WhatsApp)
+  replyTo: {
+    author: { type: String, default: null },
+    content: { type: String, default: null }
+  },
   createdAt: {
     type: Date,
     default: Date.now,
@@ -1391,7 +1396,7 @@ app.get('/api/chat', async (req, res) => {
 // Enviar un mensaje al chat
 app.post('/api/chat', async (req, res) => {
   try {
-    const { userId, content } = req.body;
+    const { userId, content, replyToId } = req.body;
     if (!userId || !content || !content.trim()) {
       return res.status(400).json({ error: 'El mensaje no puede estar vacío' });
     }
@@ -1403,7 +1408,20 @@ app.post('/api/chat', async (req, res) => {
       return res.status(403).json({ error: 'Tu cuenta está baneada y no puede enviar mensajes' });
     }
     const filtered = filterOffensiveContent(content.trim().substring(0, 500));
-    const msg = new Message({ userId, content: filtered });
+
+    // Si se responde a un mensaje, guardamos una copia (snapshot) de su autor y texto
+    let replyTo = undefined;
+    if (replyToId) {
+      const original = await Message.findById(replyToId).populate('userId', 'username');
+      if (original) {
+        replyTo = {
+          author: original.userId ? original.userId.username : 'Usuario eliminado',
+          content: original.content
+        };
+      }
+    }
+
+    const msg = new Message({ userId, content: filtered, replyTo });
     await msg.save();
     const populated = await Message.findById(msg._id).populate('userId', 'username role');
     res.status(201).json(populated);
