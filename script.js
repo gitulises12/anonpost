@@ -728,6 +728,9 @@ function createModalReplyHTML(reply, postId, commentId) {
                     <span class="like-icon">${userHasLikedReply ? '❤️' : '🤍'}</span>
                     <span class="like-count">${replyLikesCount}</span>
                 </button>
+                <button class="modal-reply-to-btn" onclick="replyToReply('${postId}', '${commentId}', '${reply._id}')" ${!currentUser ? 'disabled' : ''}>
+                    Responder
+                </button>
                 ${adminDelete}
             </div>
         </div>
@@ -934,10 +937,42 @@ async function submitModalComment(postId, buttonElement) {
 function toggleModalReplyForm(postId, commentId) {
     const replyForm = document.getElementById(`modal-reply-form-${commentId}`);
     replyForm.classList.toggle('hidden');
-    
+
     if (!replyForm.classList.contains('hidden')) {
         const textarea = replyForm.querySelector('.modal-reply-input');
         textarea.focus();
+    }
+}
+
+// Responder a una respuesta: abre el formulario del comentario y pre-llena con @usuario
+function replyToReply(postId, commentId, replyId) {
+    if (!currentUser) {
+        showError('Debes estar logueado para responder');
+        return;
+    }
+    // Obtener el nombre del autor de la respuesta desde el DOM (evita problemas con comillas)
+    let mention = '';
+    const replyEl = document.querySelector(`.modal-reply[data-reply-id="${replyId}"]`);
+    if (replyEl) {
+        const authorEl = replyEl.querySelector('.modal-reply-author');
+        if (authorEl) {
+            let name = authorEl.textContent.trim().replace(/^👑\s*/, ''); // quitar corona si es admin
+            if (name.startsWith('@')) name = name.slice(1);
+            if (name && name !== 'Usuario eliminado') mention = '@' + name + ' ';
+        }
+    }
+    // Abrir el formulario de respuesta del comentario y pre-llenar
+    const replyForm = document.getElementById(`modal-reply-form-${commentId}`);
+    if (replyForm) {
+        replyForm.classList.remove('hidden');
+        const textarea = replyForm.querySelector('.modal-reply-input');
+        if (textarea) {
+            textarea.value = mention;
+            textarea.focus();
+            // Colocar el cursor al final
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        }
+        replyForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 }
 

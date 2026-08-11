@@ -1180,3 +1180,19 @@ img, video { max-width: 100%; height: auto; }
     }
     .logout-btn:hover { background: #333333; color: #ffffff; }
 }
+
+
+/* Botón "Responder" dentro de una respuesta */
+.modal-reply-to-btn {
+    background: none;
+    border: none;
+    color: #8b98a5;
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 18px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+.modal-reply-to-btn:hover { background: rgba(29, 155, 240, 0.1); color: #1d9bf0; }
+.modal-reply-to-btn:disabled { opacity: 0.4; cursor: not-allowed; }
