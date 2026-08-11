@@ -961,14 +961,24 @@ img, video { max-width: 100%; height: auto; }
     align-items: center;
     gap: 8px;
     min-width: 0;
+    flex-shrink: 0;
+}
+/* Marca: logo con el nombre de usuario justo debajo */
+.header-brand {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    line-height: 1.15;
+    min-width: 0;
 }
 .current-user {
     font-weight: 700;
-    font-size: 14px;
-    max-width: 150px;
+    font-size: 13px;
+    max-width: 240px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    margin-top: 1px;
 }
 .logout-btn {
     background: transparent;
@@ -1018,7 +1028,7 @@ img, video { max-width: 100%; height: auto; }
     /* Header compacto: botones con TEXTO (como en PC), solo más pequeños */
     .header-content { gap: 8px; height: 56px; }
     .header-actions { gap: 6px; }
-    .current-user { max-width: 70px; font-size: 12px; }
+    .current-user { max-width: 50vw; font-size: 12px; }
 
     .admin-panel-btn { padding: 6px 11px; font-size: 12px; }
     .new-post-btn { padding: 6px 11px; font-size: 12px; }
@@ -1058,7 +1068,7 @@ img, video { max-width: 100%; height: auto; }
 
 /* ==================== MÓVIL PEQUEÑO (≤380px) ==================== */
 @media (max-width: 380px) {
-    .current-user { display: none; }  /* Ocultar nombre para ganar espacio */
+    .current-user { max-width: 45vw; font-size: 11px; }  /* Visible bajo el logo, recortado si es largo */
     .logo { font-size: 18px; }
     .admin-panel-btn, .new-post-btn, .logout-btn { padding: 6px 9px; font-size: 11px; }
 }
