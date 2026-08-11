@@ -162,6 +162,12 @@ function hideError() {
     document.getElementById('errorMessage').classList.add('hidden');
 }
 
+// Devuelve la URL correcta de una imagen (Cloudinary = URL completa; local = /uploads/)
+function imgSrc(filename) {
+    if (!filename) return '';
+    return /^https?:\/\//.test(filename) ? filename : '/uploads/' + filename;
+}
+
 // Función para crear una tarjeta de publicación
 function createPostCard(post) {
     const postCard = document.createElement('article');
@@ -180,7 +186,7 @@ function createPostCard(post) {
                             </div>
                         </div>
                     ` : `
-                        <img src="/uploads/${imageObj.filename}" alt="Imagen ${index + 1} de la publicación" class="post-image" onclick="openImageModal(this.src)">
+                        <img src="${imgSrc(imageObj.filename)}" alt="Imagen ${index + 1} de la publicación" class="post-image" onclick="openImageModal(this.src)">
                     `}
                 </div>
             `).join('')}
@@ -256,7 +262,7 @@ function showNSFWImage(element, filename) {
     const imageItem = element.closest('.post-image-item');
     
     imageItem.innerHTML = `
-        <img src="/uploads/${filename}" alt="Imagen de la publicación" class="post-image" onclick="openImageModal(this.src)">
+        <img src="${imgSrc(filename)}" alt="Imagen de la publicación" class="post-image" onclick="openImageModal(this.src)">
     `;
 }
 
@@ -602,7 +608,7 @@ function showProfileModal(profileData) {
     const postsHtml = profileData.posts.map(post => {
         const imageHtml = post.image ? `
             <div class="post-image-container">
-                <img src="/uploads/${post.image}" alt="Imagen de la publicación" class="post-image-small">
+                <img src="${imgSrc(post.image)}" alt="Imagen de la publicación" class="post-image-small">
             </div>
         ` : '';
         
@@ -773,7 +779,7 @@ function openCommentsModal(postId) {
                             <p>Contenido NSFW</p>
                         </div>
                     ` : `
-                        <img src="/uploads/${imageObj.filename}" alt="Imagen ${index + 1} de la publicación" class="modal-post-image">
+                        <img src="${imgSrc(imageObj.filename)}" alt="Imagen ${index + 1} de la publicación" class="modal-post-image">
                     `}
                 </div>
             `).join('')}

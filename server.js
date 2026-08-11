@@ -4,8 +4,38 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const nsfw = require('nsfwjs');
+const cloudinary = require('cloudinary').v2;
 require('dotenv').config();
+
+// Configurar Cloudinary (almacenamiento de imágenes en la nube)
+const CLOUDINARY_ENABLED = !!(
+  (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) ||
+  process.env.CLOUDINARY_URL
+);
+if (process.env.CLOUDINARY_CLOUD_NAME) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+  });
+}
+// (Si solo existe CLOUDINARY_URL, el SDK se autoconfigura al importarse)
+
+// Sube un buffer de imagen a Cloudinary y devuelve el resultado
+function uploadToCloudinary(buffer) {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder: 'anonposts', resource_type: 'image' },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    );
+    stream.end(buffer);
+  });
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -19,23 +49,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.static(path.join(__dirname, '.')));
 
-// Configuración de Multer para subida de imágenes
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = 'uploads/';
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
+// Configuración de Multer: guardamos en memoria para subir a Cloudinary
 const upload = multer({
-  storage: storage,
+  storage: multer.memoryStorage(),
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB límite por archivo
     files: 5 // Máximo 5 archivos
@@ -162,6 +178,10 @@ const postSchema = new mongoose.Schema({
     filename: {
       type: String,
       required: true
+    },
+    publicId: {
+      type: String,
+      default: null
     },
     isNSFW: {
       type: Boolean,
@@ -831,24 +851,41 @@ app.post('/api/posts', upload.array('images', 5), async (req, res) => {
     
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
+        let imageRef = null;   // URL de Cloudinary o nombre de archivo local
+        let publicId = null;
+        let isNSFW = false;
+
+        // 1) Guardar la imagen (Cloudinary si está configurado, si no en disco local)
         try {
-          const isNSFW = await detectNSFW(file.path);
-          images.push({
-            filename: file.filename,
-            isNSFW: isNSFW
-          });
-          
-          if (isNSFW) {
-            hasNSFWContent = true;
+          if (CLOUDINARY_ENABLED) {
+            const result = await uploadToCloudinary(file.buffer);
+            imageRef = result.secure_url;
+            publicId = result.public_id;
+          } else {
+            const ext = path.extname(file.originalname) || '.jpg';
+            const fname = 'image-' + Date.now() + '-' + Math.round(Math.random() * 1E9) + ext;
+            const dir = path.join(__dirname, 'uploads');
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(path.join(dir, fname), file.buffer);
+            imageRef = fname;
           }
-        } catch (error) {
-          console.error('Error al procesar imagen:', file.filename, error);
-          // Si hay error en detección NSFW, agregar la imagen sin marcar como NSFW
-          images.push({
-            filename: file.filename,
-            isNSFW: false
-          });
+        } catch (err) {
+          console.error('Error al guardar imagen:', err);
+          continue; // Si falla el guardado, saltamos esta imagen
         }
+
+        // 2) Detección NSFW (best-effort, desde un archivo temporal)
+        try {
+          const tmpPath = path.join(os.tmpdir(), 'nsfw-' + Date.now() + '-' + Math.round(Math.random() * 1E9));
+          fs.writeFileSync(tmpPath, file.buffer);
+          isNSFW = await detectNSFW(tmpPath);
+          fs.unlink(tmpPath, () => {});
+        } catch (err) {
+          isNSFW = false;
+        }
+
+        images.push({ filename: imageRef, publicId, isNSFW });
+        if (isNSFW) hasNSFWContent = true;
       }
     }
     
@@ -928,11 +965,15 @@ app.delete('/api/posts/:postId', requireAdmin, async (req, res) => {
     if (!post) {
       return res.status(404).json({ error: 'Publicación no encontrada' });
     }
-    // Intentar borrar los archivos de imagen asociados (si existen localmente)
+    // Intentar borrar las imágenes asociadas (Cloudinary o disco local)
     if (post.images && post.images.length > 0) {
       post.images.forEach(img => {
-        const filePath = path.join(__dirname, 'uploads', img.filename);
-        fs.unlink(filePath, () => {}); // Silencioso: si no existe, no pasa nada
+        if (img.publicId) {
+          cloudinary.uploader.destroy(img.publicId).catch(() => {}); // Silencioso
+        } else if (img.filename && !/^https?:\/\//.test(img.filename)) {
+          const filePath = path.join(__dirname, 'uploads', img.filename);
+          fs.unlink(filePath, () => {}); // Silencioso: si no existe, no pasa nada
+        }
       });
     }
     res.json({ message: 'Publicación eliminada', postId: req.params.postId });
