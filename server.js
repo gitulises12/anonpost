@@ -69,6 +69,19 @@ const userSchema = new mongoose.Schema({
     unique: true,
     index: true
   },
+  role: {
+    type: String,
+    enum: ['user', 'superadmin'],
+    default: 'user'
+  },
+  banned: {
+    type: Boolean,
+    default: false
+  },
+  tempAdminUntil: {
+    type: Date,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -172,6 +185,10 @@ const postSchema = new mongoose.Schema({
     }
   }],
   comments: [commentSchema],
+  pinned: {
+    type: Boolean,
+    default: false
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -184,6 +201,36 @@ const postSchema = new mongoose.Schema({
 
 const User = mongoose.model('User', userSchema);
 const Post = mongoose.model('Post', postSchema);
+
+
+// ==================== HELPERS DE ADMINISTRADOR ====================
+
+// Verifica si un usuario tiene poderes de admin (permanente o temporal vigente)
+function isAdmin(user) {
+  if (!user) return false;
+  if (user.role === 'superadmin') return true;
+  if (user.tempAdminUntil && new Date(user.tempAdminUntil) > new Date()) return true;
+  return false;
+}
+
+// Middleware: exige que quien hace la petición sea admin (se autentica por su código de acceso)
+async function requireAdmin(req, res, next) {
+  try {
+    const code = req.headers['x-access-code'];
+    if (!code) {
+      return res.status(401).json({ error: 'No autorizado: falta código de acceso' });
+    }
+    const user = await User.findOne({ accessCode: code.trim().toUpperCase() });
+    if (!user || !isAdmin(user)) {
+      return res.status(403).json({ error: 'Requiere permisos de administrador' });
+    }
+    req.adminUser = user;
+    next();
+  } catch (error) {
+    console.error('Error en requireAdmin:', error);
+    res.status(500).json({ error: 'Error de autenticación' });
+  }
+}
 
 
 // Lista de palabras ofensivas (lista básica en español)
@@ -339,6 +386,10 @@ app.post('/api/auth/login', async (req, res) => {
       user: {
         _id: user._id,
         username: user.username,
+        role: user.role,
+        banned: user.banned,
+        tempAdminUntil: user.tempAdminUntil,
+        isAdmin: isAdmin(user),
         createdAt: user.createdAt
       },
       message: 'Inicio de sesión exitoso'
@@ -373,6 +424,7 @@ app.get('/api/users/:userId', async (req, res) => {
       user: {
         _id: user._id,
         username: user.username,
+        role: user.role,
         createdAt: user.createdAt
       },
       posts,
@@ -697,9 +749,9 @@ app.post('/api/posts/:postId/comments/:commentId/replies/:replyId/like', async (
 app.get('/api/posts', async (req, res) => {
   try {
     const posts = await Post.find()
-      .populate('userId', 'username')
-      .populate('comments.userId', 'username')
-      .populate('comments.replies.userId', 'username')
+      .populate('userId', 'username role')
+      .populate('comments.userId', 'username role')
+      .populate('comments.replies.userId', 'username role')
       .limit(50);
     
     // Calcular score de likes recientes (últimas 24 horas) para cada post
@@ -718,8 +770,11 @@ app.get('/api/posts', async (req, res) => {
       };
     });
     
-    // Ordenar por likes recientes primero, luego por fecha de creación
+    // Ordenar: primero los fijados (pinned), luego por likes recientes, luego por fecha
     postsWithScore.sort((a, b) => {
+      if (!!a.pinned !== !!b.pinned) {
+        return a.pinned ? -1 : 1; // Los fijados siempre arriba
+      }
       if (a.recentLikesScore !== b.recentLikesScore) {
         return b.recentLikesScore - a.recentLikesScore; // Más likes recientes primero
       }
@@ -747,7 +802,10 @@ app.post('/api/posts', upload.array('images', 5), async (req, res) => {
     if (!user) {
       return res.status(400).json({ error: 'Usuario no encontrado' });
     }
-    
+    if (user.banned) {
+      return res.status(403).json({ error: 'Tu cuenta está baneada y no puede publicar' });
+    }
+
     // Filtrar contenido ofensivo
     const filteredTitle = filterOffensiveContent(title);
     const filteredDescription = filterOffensiveContent(description);
@@ -792,9 +850,9 @@ app.post('/api/posts', upload.array('images', 5), async (req, res) => {
     
     // Devolver el post con información del usuario
     const populatedPost = await Post.findById(savedPost._id)
-      .populate('userId', 'username')
-      .populate('comments.userId', 'username')
-      .populate('comments.replies.userId', 'username');
+      .populate('userId', 'username role')
+      .populate('comments.userId', 'username role')
+      .populate('comments.replies.userId', 'username role');
     res.status(201).json(populatedPost);
     
   } catch (error) {
@@ -805,7 +863,191 @@ app.post('/api/posts', upload.array('images', 5), async (req, res) => {
 
 
 
-// ==================== RUTAS DE ADMINISTRADOR ELIMINADAS ====================
+// ==================== RUTAS DE ADMINISTRADOR (SUPERADMIN) ====================
+
+// Borrar cualquier publicación
+app.delete('/api/posts/:postId', requireAdmin, async (req, res) => {
+  try {
+    const post = await Post.findByIdAndDelete(req.params.postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Publicación no encontrada' });
+    }
+    // Intentar borrar los archivos de imagen asociados (si existen localmente)
+    if (post.images && post.images.length > 0) {
+      post.images.forEach(img => {
+        const filePath = path.join(__dirname, 'uploads', img.filename);
+        fs.unlink(filePath, () => {}); // Silencioso: si no existe, no pasa nada
+      });
+    }
+    res.json({ message: 'Publicación eliminada', postId: req.params.postId });
+  } catch (error) {
+    console.error('Error al eliminar publicación:', error);
+    res.status(500).json({ error: 'Error al eliminar la publicación' });
+  }
+});
+
+// Fijar / desfijar una publicación
+app.post('/api/posts/:postId/pin', requireAdmin, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Publicación no encontrada' });
+    }
+    post.pinned = !post.pinned;
+    await post.save();
+    res.json({ message: post.pinned ? 'Publicación fijada' : 'Publicación desfijada', pinned: post.pinned });
+  } catch (error) {
+    console.error('Error al fijar publicación:', error);
+    res.status(500).json({ error: 'Error al fijar la publicación' });
+  }
+});
+
+// Borrar un comentario
+app.delete('/api/posts/:postId/comments/:commentId', requireAdmin, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Publicación no encontrada' });
+    }
+    const comment = post.comments.id(req.params.commentId);
+    if (!comment) {
+      return res.status(404).json({ error: 'Comentario no encontrado' });
+    }
+    comment.deleteOne();
+    await post.save();
+    res.json({ message: 'Comentario eliminado' });
+  } catch (error) {
+    console.error('Error al eliminar comentario:', error);
+    res.status(500).json({ error: 'Error al eliminar el comentario' });
+  }
+});
+
+// Borrar una respuesta
+app.delete('/api/posts/:postId/comments/:commentId/replies/:replyId', requireAdmin, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Publicación no encontrada' });
+    }
+    const comment = post.comments.id(req.params.commentId);
+    if (!comment) {
+      return res.status(404).json({ error: 'Comentario no encontrado' });
+    }
+    const reply = comment.replies.id(req.params.replyId);
+    if (!reply) {
+      return res.status(404).json({ error: 'Respuesta no encontrada' });
+    }
+    reply.deleteOne();
+    await post.save();
+    res.json({ message: 'Respuesta eliminada' });
+  } catch (error) {
+    console.error('Error al eliminar respuesta:', error);
+    res.status(500).json({ error: 'Error al eliminar la respuesta' });
+  }
+});
+
+// Banear / desbanear un usuario
+app.post('/api/admin/users/:userId/ban', requireAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    if (user.role === 'superadmin') {
+      return res.status(403).json({ error: 'No puedes banear al SUPERADMIN' });
+    }
+    user.banned = !user.banned;
+    await user.save();
+    res.json({ message: user.banned ? 'Usuario baneado' : 'Usuario desbaneado', banned: user.banned });
+  } catch (error) {
+    console.error('Error al banear usuario:', error);
+    res.status(500).json({ error: 'Error al banear el usuario' });
+  }
+});
+
+// Otorgar SUPERADMIN temporal (5 minutos) a un usuario
+app.post('/api/admin/users/:userId/grant-temp', requireAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    const FIVE_MINUTES = 5 * 60 * 1000;
+    user.tempAdminUntil = new Date(Date.now() + FIVE_MINUTES);
+    await user.save();
+    res.json({
+      message: `Poderes de admin otorgados a @${user.username} por 5 minutos`,
+      tempAdminUntil: user.tempAdminUntil
+    });
+  } catch (error) {
+    console.error('Error al otorgar admin temporal:', error);
+    res.status(500).json({ error: 'Error al otorgar admin temporal' });
+  }
+});
+
+// Estadísticas + bandeja de publicaciones + lista de usuarios (para el panel)
+app.get('/api/admin/stats', requireAdmin, async (req, res) => {
+  try {
+    const totalPosts = await Post.countDocuments();
+    const totalUsers = await User.countDocuments();
+
+    // Contar comentarios y likes recorriendo los posts
+    const allPosts = await Post.find().select('comments likes');
+    let totalComments = 0;
+    let totalLikes = 0;
+    allPosts.forEach(p => {
+      totalComments += p.comments ? p.comments.length : 0;
+      totalLikes += p.likes ? p.likes.length : 0;
+      if (p.comments) {
+        p.comments.forEach(c => {
+          totalComments += c.replies ? c.replies.length : 0;
+        });
+      }
+    });
+
+    // Bandeja: publicaciones más recientes
+    const recentPosts = await Post.find()
+      .populate('userId', 'username role')
+      .sort({ createdAt: -1 })
+      .limit(30)
+      .select('title description userId createdAt pinned likes comments images');
+
+    // Lista de usuarios
+    const users = await User.find()
+      .select('username role banned tempAdminUntil createdAt')
+      .sort({ createdAt: -1 });
+
+    const now = new Date();
+    const usersOut = users.map(u => ({
+      _id: u._id,
+      username: u.username,
+      role: u.role,
+      banned: u.banned,
+      isTempAdmin: !!(u.tempAdminUntil && new Date(u.tempAdminUntil) > now),
+      tempAdminUntil: u.tempAdminUntil,
+      createdAt: u.createdAt
+    }));
+
+    res.json({
+      stats: { totalPosts, totalUsers, totalComments, totalLikes },
+      recentPosts: recentPosts.map(p => ({
+        _id: p._id,
+        title: p.title,
+        author: p.userId ? p.userId.username : 'Usuario eliminado',
+        authorRole: p.userId ? p.userId.role : null,
+        createdAt: p.createdAt,
+        pinned: p.pinned,
+        likes: p.likes ? p.likes.length : 0,
+        comments: p.comments ? p.comments.length : 0,
+        images: p.images ? p.images.length : 0
+      })),
+      users: usersOut
+    });
+  } catch (error) {
+    console.error('Error al obtener estadísticas:', error);
+    res.status(500).json({ error: 'Error al obtener estadísticas' });
+  }
+});
 
 // Ruta principal para servir la aplicación HTML
 app.get('/', (req, res) => {

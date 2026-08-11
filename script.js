@@ -190,23 +190,43 @@ function createPostCard(post) {
     
     const authorName = post.userId && post.userId.username ? post.userId.username : 'Usuario eliminado';
     const authorId = post.userId && post.userId._id ? post.userId._id : null;
+    const authorRole = post.userId && post.userId.role ? post.userId.role : null;
+    const isSuperAuthor = authorRole === 'superadmin';
+    const authorLabel = isSuperAuthor ? `👑 @${authorName}` : `@${authorName}`;
     const likesCount = post.likes ? post.likes.length : 0;
     const userHasLiked = post.likes && currentUser ? post.likes.some(like => like.userId === currentUser._id) : false;
+
+    // Controles exclusivos del SUPERADMIN
+    const adminControls = isSuperUser() ? `
+        <div class="post-admin-actions">
+            <button class="admin-pin-btn ${post.pinned ? 'pinned' : ''}" onclick="togglePin('${post._id}')" title="${post.pinned ? 'Desfijar' : 'Fijar arriba'}">
+                ${post.pinned ? '📌 Fijado' : '📌 Fijar'}
+            </button>
+            <button class="admin-delete-btn" onclick="adminDeletePost('${post._id}')" title="Borrar publicación">
+                🗑️ Borrar
+            </button>
+        </div>
+    ` : '';
     
+    if (post.pinned) {
+        postCard.classList.add('post-pinned');
+    }
+
     postCard.innerHTML = `
+        ${post.pinned ? '<div class="pinned-banner">📌 Publicación fijada</div>' : ''}
         <div class="post-header">
             <div class="post-meta">
-                <span class="post-author ${authorId ? 'clickable-author' : ''}" ${authorId ? `onclick="viewProfile('${authorId}')"` : ''}>@${authorName}</span>
+                <span class="post-author ${authorId ? 'clickable-author' : ''} ${isSuperAuthor ? 'superadmin-name' : ''}" ${authorId ? `onclick="viewProfile('${authorId}')"` : ''}>${authorLabel}</span>
                 <span class="post-date">${formatDate(post.createdAt)}</span>
             </div>
         </div>
-        
+
         <div class="post-content">
             <h3 class="post-title">${post.title}</h3>
             <p class="post-description">${post.description}</p>
             ${imagesHtml}
         </div>
-        
+
         <div class="post-actions">
             <div class="post-actions-left">
                 <button class="like-btn ${userHasLiked ? 'liked' : ''}" onclick="toggleLike('${post._id}', this)" ${!currentUser ? 'disabled' : ''}>
@@ -218,10 +238,10 @@ function createPostCard(post) {
                     <span class="comment-count">${post.comments ? post.comments.length : 0}</span>
                 </button>
             </div>
-
+            ${adminControls}
         </div>
     `;
-    
+
     return postCard;
 }
 
@@ -266,8 +286,49 @@ let posts = [];
 // Variable para almacenar el usuario actual
 let currentUser = null;
 
+// Código de acceso del usuario actual (necesario para acciones de admin)
+let currentAccessCode = localStorage.getItem('accessCode') || null;
+
 // Array para almacenar las imágenes seleccionadas
 let selectedImages = [];
+
+// ==================== HELPERS DE ADMINISTRADOR (FRONTEND) ====================
+
+// ¿El usuario actual tiene poderes de admin? (permanente o temporal vigente)
+function isSuperUser() {
+    if (!currentUser) return false;
+    if (currentUser.role === 'superadmin') return true;
+    if (currentUser.tempAdminUntil && new Date(currentUser.tempAdminUntil) > new Date()) return true;
+    return false;
+}
+
+// Devuelve el HTML de un nombre de usuario con estilo dorado + corona si es superadmin
+function renderAuthorName(userObj) {
+    const name = userObj && userObj.username ? userObj.username : 'Usuario eliminado';
+    const isSuper = userObj && userObj.role === 'superadmin';
+    if (isSuper) {
+        return `<span class="superadmin-name">👑 @${name}</span>`;
+    }
+    return `@${name}`;
+}
+
+// Cabeceras con el código de acceso para autenticar acciones de admin
+function adminHeaders(extra = {}) {
+    return Object.assign({ 'x-access-code': currentAccessCode || '' }, extra);
+}
+
+// Notificación flotante rápida
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `admin-toast admin-toast-${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 10);
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
 
 // Funciones de gestión de usuarios
 function checkUserSession() {
@@ -345,13 +406,31 @@ function showUserInterface() {
     document.getElementById('newPostBtn').classList.remove('hidden');
     document.getElementById('currentUser').classList.remove('hidden');
     document.getElementById('logoutBtn').classList.remove('hidden');
-    document.getElementById('currentUser').textContent = `@${currentUser.username}`;
+
+    // Mostrar nombre (dorado + corona si es SUPERADMIN)
+    const userEl = document.getElementById('currentUser');
+    if (isSuperUser()) {
+        userEl.innerHTML = `👑 @${currentUser.username}`;
+        userEl.classList.add('superadmin-name');
+    } else {
+        userEl.textContent = `@${currentUser.username}`;
+        userEl.classList.remove('superadmin-name');
+    }
+
+    // Mostrar u ocultar el botón del panel de admin
+    const adminBtn = document.getElementById('adminPanelBtn');
+    if (adminBtn) {
+        adminBtn.classList.toggle('hidden', !isSuperUser());
+    }
+
     loadPosts();
 }
 
 function logout() {
     currentUser = null;
+    currentAccessCode = null;
     localStorage.removeItem('currentUser');
+    localStorage.removeItem('accessCode');
     // Mantener términos aceptados para no tener que aceptarlos de nuevo
     showAuthScreen();
 }
@@ -395,8 +474,11 @@ async function loginWithCode(accessCode) {
         const loginData = await response.json();
         currentUser = loginData.user;
         localStorage.setItem('currentUser', JSON.stringify(loginData.user));
+        // Guardar el código de acceso para poder autenticar acciones de admin
+        currentAccessCode = accessCode;
+        localStorage.setItem('accessCode', accessCode);
         showUserInterface();
-        
+
         return true;
     } catch (error) {
         console.error('Error en login:', error);
@@ -563,14 +645,20 @@ function closeProfileModal() {
 function createModalCommentHTML(comment, postId) {
     const commentLikesCount = comment.likes ? comment.likes.length : 0;
     const userHasLikedComment = comment.likes && currentUser ? comment.likes.some(like => like.userId === currentUser._id) : false;
+    const isSuperAuthor = comment.userId && comment.userId.role === 'superadmin';
     const authorName = comment.userId && comment.userId.username ? comment.userId.username : 'Usuario eliminado';
-    
+    const authorLabel = isSuperAuthor ? `👑 @${authorName}` : `@${authorName}`;
+
+    const adminDelete = isSuperUser() ? `
+                <button class="modal-admin-delete" onclick="adminDeleteComment('${postId}', '${comment._id}')" title="Borrar comentario">🗑️</button>
+    ` : '';
+
     const repliesHTML = comment.replies ? comment.replies.map(reply => createModalReplyHTML(reply, postId, comment._id)).join('') : '';
-    
+
     return `
         <div class="modal-comment" data-comment-id="${comment._id}">
             <div class="modal-comment-header">
-                <span class="modal-comment-author">@${authorName}</span>
+                <span class="modal-comment-author ${isSuperAuthor ? 'superadmin-name' : ''}">${authorLabel}</span>
                 <span class="modal-comment-date">${formatDate(comment.createdAt)}</span>
             </div>
             <div class="modal-comment-content">
@@ -584,6 +672,7 @@ function createModalCommentHTML(comment, postId) {
                 <button class="modal-reply-btn" onclick="toggleModalReplyForm('${postId}', '${comment._id}')" ${!currentUser ? 'disabled' : ''}>
                     Responder
                 </button>
+                ${adminDelete}
             </div>
             <div class="modal-reply-form hidden" id="modal-reply-form-${comment._id}">
                 <textarea class="modal-reply-input" placeholder="Escribe una respuesta..." maxlength="1000"></textarea>
@@ -599,12 +688,18 @@ function createModalCommentHTML(comment, postId) {
 function createModalReplyHTML(reply, postId, commentId) {
     const replyLikesCount = reply.likes ? reply.likes.length : 0;
     const userHasLikedReply = reply.likes && currentUser ? reply.likes.some(like => like.userId === currentUser._id) : false;
+    const isSuperAuthor = reply.userId && reply.userId.role === 'superadmin';
     const authorName = reply.userId && reply.userId.username ? reply.userId.username : 'Usuario eliminado';
-    
+    const authorLabel = isSuperAuthor ? `👑 @${authorName}` : `@${authorName}`;
+
+    const adminDelete = isSuperUser() ? `
+                <button class="modal-admin-delete" onclick="adminDeleteReply('${postId}', '${commentId}', '${reply._id}')" title="Borrar respuesta">🗑️</button>
+    ` : '';
+
     return `
         <div class="modal-reply" data-reply-id="${reply._id}">
             <div class="modal-reply-header">
-                <span class="modal-reply-author">@${authorName}</span>
+                <span class="modal-reply-author ${isSuperAuthor ? 'superadmin-name' : ''}">${authorLabel}</span>
                 <span class="modal-reply-date">${formatDate(reply.createdAt)}</span>
             </div>
             <div class="modal-reply-content">
@@ -615,6 +710,7 @@ function createModalReplyHTML(reply, postId, commentId) {
                     <span class="like-icon">${userHasLikedReply ? '❤️' : '🤍'}</span>
                     <span class="like-count">${replyLikesCount}</span>
                 </button>
+                ${adminDelete}
             </div>
         </div>
     `;
@@ -3902,3 +3998,236 @@ function resetApplication() {
 
 // Para testing: agregar función global para resetear
 window.resetApp = resetApplication;
+
+
+// ==================== FUNCIONES DE ADMINISTRADOR (SUPERADMIN) ====================
+
+// Manejo genérico de respuesta de acción admin
+async function handleAdminResponse(response) {
+    let data = {};
+    try { data = await response.json(); } catch (e) {}
+    if (!response.ok) {
+        throw new Error(data.error || 'Error en la acción de administrador');
+    }
+    return data;
+}
+
+// Borrar cualquier publicación
+async function adminDeletePost(postId) {
+    if (!isSuperUser()) return;
+    if (!confirm('¿Seguro que quieres BORRAR esta publicación? Esta acción no se puede deshacer.')) return;
+    try {
+        const response = await fetch(`/api/posts/${postId}`, {
+            method: 'DELETE',
+            headers: adminHeaders()
+        });
+        await handleAdminResponse(response);
+        showToast('🗑️ Publicación eliminada', 'success');
+        posts = posts.filter(p => p._id !== postId);
+        await loadPosts();
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+// Fijar / desfijar publicación
+async function togglePin(postId) {
+    if (!isSuperUser()) return;
+    try {
+        const response = await fetch(`/api/posts/${postId}/pin`, {
+            method: 'POST',
+            headers: adminHeaders()
+        });
+        const data = await handleAdminResponse(response);
+        showToast(data.pinned ? '📌 Publicación fijada' : 'Publicación desfijada', 'success');
+        await loadPosts();
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+// Borrar un comentario
+async function adminDeleteComment(postId, commentId) {
+    if (!isSuperUser()) return;
+    if (!confirm('¿Borrar este comentario?')) return;
+    try {
+        const response = await fetch(`/api/posts/${postId}/comments/${commentId}`, {
+            method: 'DELETE',
+            headers: adminHeaders()
+        });
+        await handleAdminResponse(response);
+        showToast('🗑️ Comentario eliminado', 'success');
+        const el = document.querySelector(`.modal-comment[data-comment-id="${commentId}"]`);
+        if (el) el.remove();
+        const postIndex = posts.findIndex(p => p._id === postId);
+        if (postIndex !== -1 && posts[postIndex].comments) {
+            posts[postIndex].comments = posts[postIndex].comments.filter(c => c._id !== commentId);
+        }
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+// Borrar una respuesta
+async function adminDeleteReply(postId, commentId, replyId) {
+    if (!isSuperUser()) return;
+    if (!confirm('¿Borrar esta respuesta?')) return;
+    try {
+        const response = await fetch(`/api/posts/${postId}/comments/${commentId}/replies/${replyId}`, {
+            method: 'DELETE',
+            headers: adminHeaders()
+        });
+        await handleAdminResponse(response);
+        showToast('🗑️ Respuesta eliminada', 'success');
+        const el = document.querySelector(`.modal-reply[data-reply-id="${replyId}"]`);
+        if (el) el.remove();
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+// Banear / desbanear usuario
+async function banUser(userId, username) {
+    if (!isSuperUser()) return;
+    if (!confirm(`¿Cambiar el estado de baneo de @${username}?`)) return;
+    try {
+        const response = await fetch(`/api/admin/users/${userId}/ban`, {
+            method: 'POST',
+            headers: adminHeaders()
+        });
+        const data = await handleAdminResponse(response);
+        showToast(data.banned ? `🚫 @${username} baneado` : `✅ @${username} desbaneado`, 'success');
+        loadAdminPanel();
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+// Otorgar admin temporal (5 min)
+async function grantTempAdmin(userId, username) {
+    if (!isSuperUser()) return;
+    if (!confirm(`¿Otorgar poderes de SUPERADMIN a @${username} por 5 minutos?`)) return;
+    try {
+        const response = await fetch(`/api/admin/users/${userId}/grant-temp`, {
+            method: 'POST',
+            headers: adminHeaders()
+        });
+        await handleAdminResponse(response);
+        showToast(`👑 @${username} es admin temporal por 5 min`, 'success');
+        loadAdminPanel();
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+// ---- Panel de administrador ----
+
+function openAdminPanel() {
+    if (!isSuperUser()) return;
+    let modal = document.getElementById('adminPanelModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'adminPanelModal';
+        modal.className = 'admin-panel-modal';
+        document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+        <div class="admin-panel-overlay" onclick="closeAdminPanel()"></div>
+        <div class="admin-panel-content">
+            <div class="admin-panel-header">
+                <h2>👑 Panel de SUPERADMIN</h2>
+                <button class="admin-panel-close" onclick="closeAdminPanel()">✖️</button>
+            </div>
+            <div class="admin-panel-body" id="adminPanelBody">
+                <p class="admin-loading">Cargando...</p>
+            </div>
+        </div>
+    `;
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    loadAdminPanel();
+}
+
+function closeAdminPanel() {
+    const modal = document.getElementById('adminPanelModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        document.body.style.overflow = 'auto';
+    }
+}
+
+async function loadAdminPanel() {
+    const body = document.getElementById('adminPanelBody');
+    if (!body) return;
+    try {
+        const response = await fetch('/api/admin/stats', { headers: adminHeaders() });
+        const data = await handleAdminResponse(response);
+        const s = data.stats;
+
+        const statsHTML = `
+            <div class="admin-stats-grid">
+                <div class="admin-stat-card"><span class="admin-stat-num">${s.totalPosts}</span><span class="admin-stat-label">Publicaciones</span></div>
+                <div class="admin-stat-card"><span class="admin-stat-num">${s.totalUsers}</span><span class="admin-stat-label">Usuarios</span></div>
+                <div class="admin-stat-card"><span class="admin-stat-num">${s.totalComments}</span><span class="admin-stat-label">Comentarios</span></div>
+                <div class="admin-stat-card"><span class="admin-stat-num">${s.totalLikes}</span><span class="admin-stat-label">Likes</span></div>
+            </div>
+        `;
+
+        const postsHTML = data.recentPosts.length ? data.recentPosts.map(p => `
+            <div class="admin-tray-item">
+                <div class="admin-tray-info">
+                    <span class="admin-tray-title">${p.pinned ? '📌 ' : ''}${escapeHtml(p.title)}</span>
+                    <span class="admin-tray-meta">${p.authorRole === 'superadmin' ? '👑 ' : ''}@${escapeHtml(p.author)} · ❤️ ${p.likes} · 💬 ${p.comments} · 🖼️ ${p.images}</span>
+                </div>
+                <div class="admin-tray-actions">
+                    <button class="admin-mini-btn ${p.pinned ? 'active' : ''}" onclick="togglePin('${p._id}')" title="Fijar/Desfijar">📌</button>
+                    <button class="admin-mini-btn danger" onclick="adminDeletePost('${p._id}')" title="Borrar">🗑️</button>
+                </div>
+            </div>
+        `).join('') : '<p class="admin-empty">No hay publicaciones</p>';
+
+        const usersHTML = data.users.length ? data.users.map(u => `
+            <div class="admin-user-item ${u.banned ? 'banned' : ''}">
+                <div class="admin-user-info">
+                    <span class="admin-user-name ${u.role === 'superadmin' ? 'superadmin-name' : ''}">${u.role === 'superadmin' ? '👑 ' : ''}@${escapeHtml(u.username)}</span>
+                    <span class="admin-user-tags">
+                        ${u.role === 'superadmin' ? '<span class="tag tag-super">SUPERADMIN</span>' : ''}
+                        ${u.isTempAdmin ? '<span class="tag tag-temp">Admin temporal</span>' : ''}
+                        ${u.banned ? '<span class="tag tag-ban">Baneado</span>' : ''}
+                    </span>
+                </div>
+                <div class="admin-user-actions">
+                    ${u.role !== 'superadmin' ? `
+                        <button class="admin-mini-btn" onclick="grantTempAdmin('${u._id}', '${escapeHtml(u.username)}')" title="Admin temporal 5 min">👑</button>
+                        <button class="admin-mini-btn ${u.banned ? 'active' : 'danger'}" onclick="banUser('${u._id}', '${escapeHtml(u.username)}')" title="Banear/Desbanear">🚫</button>
+                    ` : '<span class="admin-you">Tú</span>'}
+                </div>
+            </div>
+        `).join('') : '<p class="admin-empty">No hay usuarios</p>';
+
+        body.innerHTML = `
+            ${statsHTML}
+            <div class="admin-section">
+                <h3>📥 Bandeja de publicaciones</h3>
+                <div class="admin-tray">${postsHTML}</div>
+            </div>
+            <div class="admin-section">
+                <h3>👥 Usuarios registrados</h3>
+                <div class="admin-users">${usersHTML}</div>
+            </div>
+        `;
+    } catch (error) {
+        body.innerHTML = `<p class="admin-error">Error: ${error.message}</p>`;
+    }
+}
+
+// Escapar HTML para evitar romper el markup con contenido de usuarios
+function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
