@@ -246,7 +246,8 @@ const Post = mongoose.model('Post', postSchema);
 
 // Configuración global de la app (documento único). Ej: modo "congelado".
 const settingSchema = new mongoose.Schema({
-  frozen: { type: Boolean, default: false }
+  frozen: { type: Boolean, default: false },
+  postDurationHours: { type: Number, default: 3 } // Duración global de los posts (horas)
 });
 const Setting = mongoose.model('Setting', settingSchema);
 
@@ -985,15 +986,15 @@ app.post('/api/posts', upload.array('images', 5), async (req, res) => {
     }
     
     // Crear nueva publicación
-    // Los posts expiran (se borran solos) 3 horas después de crearse
-    const THREE_HOURS = 3 * 60 * 60 * 1000;
+    // Los posts expiran (se borran solos) según la duración configurada por el admin
+    const durationHours = (await getSettings()).postDurationHours || 3;
     const newPost = new Post({
       title: filteredTitle,
       description: filteredDescription,
       images: images,
       userId: userId,
       isNSFW: hasNSFWContent,
-      expiresAt: new Date(Date.now() + THREE_HOURS)
+      expiresAt: new Date(Date.now() + durationHours * 60 * 60 * 1000)
     });
     
     const savedPost = await newPost.save();
@@ -1064,6 +1065,24 @@ app.post('/api/admin/freeze', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error al congelar:', error);
     res.status(500).json({ error: 'Error al cambiar el estado de congelado' });
+  }
+});
+
+// Cambiar la duración global de las publicaciones (solo valores permitidos)
+app.post('/api/admin/post-duration', requireAdmin, async (req, res) => {
+  try {
+    const hours = Number(req.body.hours);
+    const allowed = [1, 3, 5, 24];
+    if (!allowed.includes(hours)) {
+      return res.status(400).json({ error: 'Duración no válida. Usa 1, 3, 5 o 24 horas.' });
+    }
+    const s = await getSettings();
+    s.postDurationHours = hours;
+    await s.save();
+    res.json({ message: `Duración de publicaciones: ${hours} hora(s)`, postDurationHours: hours });
+  } catch (error) {
+    console.error('Error al cambiar duración:', error);
+    res.status(500).json({ error: 'Error al cambiar la duración' });
   }
 });
 
@@ -1161,11 +1180,12 @@ app.post('/api/posts/:postId/pin', requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Publicación no encontrada' });
     }
     post.pinned = !post.pinned;
-    // Al fijar, el post deja de expirar; al desfijar, vuelve a durar 3 horas
+    // Al fijar, el post deja de expirar; al desfijar, vuelve a durar lo configurado
     if (post.pinned) {
       post.expiresAt = null;
     } else {
-      post.expiresAt = new Date(Date.now() + 3 * 60 * 60 * 1000);
+      const durationHours = (await getSettings()).postDurationHours || 3;
+      post.expiresAt = new Date(Date.now() + durationHours * 60 * 60 * 1000);
     }
     await post.save();
     res.json({ message: post.pinned ? 'Publicación fijada (ya no expira)' : 'Publicación desfijada', pinned: post.pinned });
@@ -1303,6 +1323,7 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
     const settings = await getSettings();
     res.json({
       frozen: settings.frozen,
+      postDurationHours: settings.postDurationHours || 3,
       stats: {
         totalPosts,
         totalUsers,

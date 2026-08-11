@@ -1196,3 +1196,40 @@ img, video { max-width: 100%; height: auto; }
 }
 .modal-reply-to-btn:hover { background: rgba(29, 155, 240, 0.1); color: #1d9bf0; }
 .modal-reply-to-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+
+/* Selector de duración de publicaciones (panel admin) */
+.admin-duration {
+    margin-bottom: 12px;
+}
+.admin-duration-label {
+    display: block;
+    font-size: 13px;
+    color: #71767b;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+.admin-duration-btns {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.admin-duration-btn {
+    flex: 1;
+    min-width: 60px;
+    background: #000000;
+    border: 1px solid #333333;
+    color: #ffffff;
+    padding: 10px 8px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+.admin-duration-btn:hover { background: #1a1d21; transform: translateY(-1px); }
+.admin-duration-btn.active {
+    background: #d4af37;
+    border-color: #d4af37;
+    color: #1a1a1a;
+}

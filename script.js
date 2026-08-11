@@ -4380,6 +4380,23 @@ async function toggleFreeze() {
     }
 }
 
+// Cambiar la duración global de las publicaciones
+async function setPostDuration(hours) {
+    if (!isSuperUser()) return;
+    try {
+        const response = await fetch('/api/admin/post-duration', {
+            method: 'POST',
+            headers: adminHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ hours })
+        });
+        const data = await handleAdminResponse(response);
+        showToast(`⏱️ Las publicaciones ahora duran ${hours} hora(s)`, 'success');
+        loadAdminPanel();
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
 // Eliminar TODAS las publicaciones
 async function deleteAllPosts() {
     if (!isSuperUser()) return;
@@ -4524,9 +4541,20 @@ async function loadAdminPanel() {
             </div>
         `).join('') : '<p class="admin-empty">No hay usuarios</p>';
 
+        const currentDuration = data.postDurationHours || 3;
+        const durationOptions = [1, 3, 5, 24].map(h => `
+            <button class="admin-duration-btn ${currentDuration === h ? 'active' : ''}" onclick="setPostDuration(${h})">
+                ${h === 24 ? '24 h' : h + ' h'}
+            </button>
+        `).join('');
+
         const controlsHTML = `
             <div class="admin-section">
                 <h3>⚙️ Controles de la página</h3>
+                <div class="admin-duration">
+                    <span class="admin-duration-label">⏱️ Duración de las publicaciones:</span>
+                    <div class="admin-duration-btns">${durationOptions}</div>
+                </div>
                 <div class="admin-controls">
                     <button class="admin-control-btn ${data.frozen ? 'frozen-on' : ''}" onclick="toggleFreeze()">
                         ${data.frozen ? '🔥 Descongelar página' : '❄️ Congelar página'}
