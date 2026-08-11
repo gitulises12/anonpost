@@ -258,6 +258,26 @@ async function getSettings() {
   return s;
 }
 
+// Mensajes del chat público global (se auto-borran a las 24 horas)
+const messageSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  content: {
+    type: String,
+    required: true,
+    maxlength: 500
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+    expires: 86400 // TTL: 24 horas
+  }
+});
+const Message = mongoose.model('Message', messageSchema);
+
 
 // ==================== HELPERS DE ADMINISTRADOR ====================
 
@@ -1348,6 +1368,60 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error al obtener estadísticas:', error);
     res.status(500).json({ error: 'Error al obtener estadísticas' });
+  }
+});
+
+// ==================== CHAT PÚBLICO GLOBAL ====================
+
+// Obtener los últimos mensajes del chat
+app.get('/api/chat', async (req, res) => {
+  try {
+    const messages = await Message.find()
+      .populate('userId', 'username role')
+      .sort({ createdAt: -1 })
+      .limit(80);
+    // Devolver en orden cronológico (más antiguo primero)
+    res.json(messages.reverse());
+  } catch (error) {
+    console.error('Error al obtener mensajes:', error);
+    res.status(500).json({ error: 'Error al obtener los mensajes' });
+  }
+});
+
+// Enviar un mensaje al chat
+app.post('/api/chat', async (req, res) => {
+  try {
+    const { userId, content } = req.body;
+    if (!userId || !content || !content.trim()) {
+      return res.status(400).json({ error: 'El mensaje no puede estar vacío' });
+    }
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(400).json({ error: 'Usuario no encontrado' });
+    }
+    if (user.banned) {
+      return res.status(403).json({ error: 'Tu cuenta está baneada y no puede enviar mensajes' });
+    }
+    const filtered = filterOffensiveContent(content.trim().substring(0, 500));
+    const msg = new Message({ userId, content: filtered });
+    await msg.save();
+    const populated = await Message.findById(msg._id).populate('userId', 'username role');
+    res.status(201).json(populated);
+  } catch (error) {
+    console.error('Error al enviar mensaje:', error);
+    res.status(500).json({ error: 'Error al enviar el mensaje' });
+  }
+});
+
+// Borrar un mensaje (solo admin)
+app.delete('/api/chat/:id', requireAdmin, async (req, res) => {
+  try {
+    const msg = await Message.findByIdAndDelete(req.params.id);
+    if (!msg) return res.status(404).json({ error: 'Mensaje no encontrado' });
+    res.json({ message: 'Mensaje eliminado' });
+  } catch (error) {
+    console.error('Error al eliminar mensaje:', error);
+    res.status(500).json({ error: 'Error al eliminar el mensaje' });
   }
 });
 

@@ -449,6 +449,9 @@ function showUserInterface() {
     startAutoRefresh(); // Feed en vivo: se actualiza solo cada 3s
     startRelativeTimeUpdater(); // "Hace X minutos" se actualiza solo
     updateFreezeIndicator(); // Mostrar estado inicial (En vivo / Congelado)
+
+    const chatFab = document.getElementById('chatFab');
+    if (chatFab) chatFab.classList.remove('hidden');
 }
 
 function logout() {
@@ -456,6 +459,10 @@ function logout() {
     currentAccessCode = null;
     localStorage.removeItem('currentUser');
     localStorage.removeItem('accessCode');
+    // Ocultar y cerrar el chat
+    const chatFab = document.getElementById('chatFab');
+    if (chatFab) chatFab.classList.add('hidden');
+    closeChat();
     // Mantener términos aceptados para no tener que aceptarlos de nuevo
     showAuthScreen();
 }
@@ -4613,4 +4620,128 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+
+// ==================== CHAT PÚBLICO GLOBAL ====================
+
+let chatPollTimer = null;
+let lastChatSignature = '';
+
+function openChat() {
+    if (!currentUser) { showError('Debes iniciar sesión para chatear'); return; }
+    let modal = document.getElementById('chatModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'chatModal';
+        modal.className = 'chat-modal';
+        document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+        <div class="chat-overlay" onclick="closeChat()"></div>
+        <div class="chat-content">
+            <div class="chat-header">
+                <h3>💬 Chat público</h3>
+                <button class="chat-close" onclick="closeChat()">✖️</button>
+            </div>
+            <div class="chat-messages" id="chatMessages"><p class="chat-loading">Cargando...</p></div>
+            <div class="chat-input-row">
+                <input id="chatInput" class="chat-input" type="text" maxlength="500" placeholder="Escribe un mensaje..."
+                    onkeydown="if(event.key==='Enter'){event.preventDefault();sendChatMessage();}">
+                <button class="chat-send" onclick="sendChatMessage()">Enviar</button>
+            </div>
+        </div>
+    `;
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    lastChatSignature = '';
+    loadChatMessages(true);
+    // Polling cada 3 segundos mientras el chat esté abierto
+    if (chatPollTimer) clearInterval(chatPollTimer);
+    chatPollTimer = setInterval(loadChatMessages, 3000);
+}
+
+function closeChat() {
+    const modal = document.getElementById('chatModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        document.body.style.overflow = 'auto';
+    }
+    if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+}
+
+function chatSignature(list) {
+    return list.map(m => m._id + ':' + (m.userId ? m.userId.username : '')).join('|');
+}
+
+async function loadChatMessages(force = false) {
+    const box = document.getElementById('chatMessages');
+    if (!box) return;
+    try {
+        const response = await fetch('/api/chat');
+        if (!response.ok) return;
+        const messages = await response.json();
+        const sig = chatSignature(messages);
+        if (!force && sig === lastChatSignature) return; // nada nuevo → no re-dibujar
+        lastChatSignature = sig;
+
+        if (!messages.length) {
+            box.innerHTML = '<p class="chat-empty">Aún no hay mensajes. ¡Escribe el primero! 👋</p>';
+            return;
+        }
+        box.innerHTML = messages.map(m => {
+            const isSuper = m.userId && m.userId.role === 'superadmin';
+            const name = m.userId && m.userId.username ? m.userId.username : 'Usuario eliminado';
+            const mine = currentUser && m.userId && m.userId._id === currentUser._id;
+            const del = isSuperUser() ? `<button class="chat-del" onclick="deleteChatMessage('${m._id}')" title="Borrar">🗑️</button>` : '';
+            return `
+                <div class="chat-msg ${mine ? 'mine' : ''}">
+                    <div class="chat-msg-head">
+                        <span class="chat-msg-author ${isSuper ? 'superadmin-name' : ''}">${isSuper ? '👑 ' : ''}@${escapeHtml(name)}</span>
+                        <span class="chat-msg-time" data-created="${m.createdAt}">${formatDate(m.createdAt)}</span>
+                        ${del}
+                    </div>
+                    <div class="chat-msg-text">${escapeHtml(m.content)}</div>
+                </div>
+            `;
+        }).join('');
+        // Auto-scroll al final
+        box.scrollTop = box.scrollHeight;
+    } catch (e) { /* silencioso */ }
+}
+
+async function sendChatMessage() {
+    if (!currentUser) return;
+    const input = document.getElementById('chatInput');
+    if (!input) return;
+    const content = input.value.trim();
+    if (!content) return;
+    input.value = '';
+    try {
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: currentUser._id, content })
+        });
+        let data = {};
+        try { data = await response.json(); } catch (e) {}
+        if (!response.ok) throw new Error(data.error || 'Error al enviar');
+        await loadChatMessages(true); // refrescar de inmediato
+    } catch (error) {
+        showToast(error.message, 'error');
+        input.value = content; // devolver el texto si falló
+    }
+}
+
+async function deleteChatMessage(id) {
+    if (!isSuperUser()) return;
+    if (!confirm('¿Borrar este mensaje?')) return;
+    try {
+        const response = await fetch(`/api/chat/${id}`, { method: 'DELETE', headers: adminHeaders() });
+        await handleAdminResponse(response);
+        showToast('🗑️ Mensaje eliminado', 'success');
+        await loadChatMessages(true);
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
 }
