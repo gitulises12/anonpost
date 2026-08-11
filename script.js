@@ -22,10 +22,16 @@ function filterOffensiveContent(text) {
 function formatDate(dateString) {
     const date = new Date(dateString);
     const now = new Date();
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-    
-    if (diffInHours < 1) {
-        return 'Hace unos minutos';
+    const diffMs = now.getTime() - date.getTime();
+    const diffInSeconds = Math.floor(diffMs / 1000);
+    const diffInMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffInHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+    if (diffInSeconds < 60) {
+        return 'Hace un momento';
+    } else if (diffInMinutes < 60) {
+        // Detalle en minutos hasta la primera hora
+        return `Hace ${diffInMinutes} minuto${diffInMinutes > 1 ? 's' : ''}`;
     } else if (diffInHours < 24) {
         return `Hace ${diffInHours} hora${diffInHours > 1 ? 's' : ''}`;
     } else {
@@ -226,7 +232,7 @@ function createPostCard(post) {
         <div class="post-header">
             <div class="post-meta">
                 <span class="post-author ${authorId ? 'clickable-author' : ''} ${isSuperAuthor ? 'superadmin-name' : ''}" ${authorId ? `onclick="viewProfile('${authorId}')"` : ''}>${authorLabel}</span>
-                <span class="post-date">${formatDate(post.createdAt)}</span>
+                <span class="post-date" data-created="${post.createdAt}">${formatDate(post.createdAt)}</span>
             </div>
             ${isSuperAuthor ? '' : `
             <div class="post-menu">
@@ -441,6 +447,7 @@ function showUserInterface() {
 
     loadPosts();
     startAutoRefresh(); // Feed en vivo: se actualiza solo cada 3s
+    startRelativeTimeUpdater(); // "Hace X minutos" se actualiza solo
     updateFreezeIndicator(); // Mostrar estado inicial (En vivo / Congelado)
 }
 
@@ -623,7 +630,7 @@ function showProfileModal(profileData) {
                 <h4 class="post-title">${post.title}</h4>
                 <p class="post-description">${post.description}</p>
                 ${imageHtml}
-                <span class="post-date">${formatDate(post.createdAt)}</span>
+                <span class="post-date" data-created="${post.createdAt}">${formatDate(post.createdAt)}</span>
             </div>
         `;
     }).join('');
@@ -1513,6 +1520,19 @@ function startAutoRefresh() {
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden) autoRefreshFeed();
     });
+}
+
+// Actualiza los tiempos relativos ("Hace X minutos") en su lugar, sin re-dibujar el feed
+let relativeTimeTimer = null;
+function refreshRelativeTimes() {
+    document.querySelectorAll('[data-created]').forEach(el => {
+        const created = el.getAttribute('data-created');
+        if (created) el.textContent = formatDate(created);
+    });
+}
+function startRelativeTimeUpdater() {
+    if (relativeTimeTimer) return;
+    relativeTimeTimer = setInterval(refreshRelativeTimes, 30000); // cada 30 segundos
 }
 
 // Función para crear nueva publicación
