@@ -219,6 +219,12 @@ function createPostCard(post) {
                 <span class="post-author ${authorId ? 'clickable-author' : ''} ${isSuperAuthor ? 'superadmin-name' : ''}" ${authorId ? `onclick="viewProfile('${authorId}')"` : ''}>${authorLabel}</span>
                 <span class="post-date">${formatDate(post.createdAt)}</span>
             </div>
+            <div class="post-menu">
+                <button class="post-menu-btn" onclick="togglePostMenu(event, '${post._id}')" title="Opciones">⋮</button>
+                <div class="post-menu-dropdown hidden" id="post-menu-${post._id}">
+                    <button class="post-menu-option" onclick="reportPost('${post._id}')">🚩 Reportar publicación</button>
+                </div>
+            </div>
         </div>
 
         <div class="post-content">
@@ -4000,6 +4006,53 @@ function resetApplication() {
 window.resetApp = resetApplication;
 
 
+// ==================== REPORTAR PUBLICACIONES ====================
+
+// Abrir/cerrar el menú de 3 puntitos de una publicación
+function togglePostMenu(event, postId) {
+    event.stopPropagation();
+    const dropdown = document.getElementById(`post-menu-${postId}`);
+    if (!dropdown) return;
+    // Cerrar todos los demás menús abiertos
+    document.querySelectorAll('.post-menu-dropdown').forEach(d => {
+        if (d !== dropdown) d.classList.add('hidden');
+    });
+    dropdown.classList.toggle('hidden');
+}
+
+// Cerrar los menús al hacer clic en cualquier otro lado
+document.addEventListener('click', () => {
+    document.querySelectorAll('.post-menu-dropdown').forEach(d => d.classList.add('hidden'));
+});
+
+// Reportar una publicación
+async function reportPost(postId) {
+    // Cerrar el menú
+    const dropdown = document.getElementById(`post-menu-${postId}`);
+    if (dropdown) dropdown.classList.add('hidden');
+
+    if (!currentUser) {
+        showError('Debes iniciar sesión para reportar');
+        return;
+    }
+    if (!confirm('¿Reportar esta publicación a los administradores?')) return;
+    try {
+        const response = await fetch(`/api/posts/${postId}/report`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: currentUser._id })
+        });
+        let data = {};
+        try { data = await response.json(); } catch (e) {}
+        if (!response.ok) {
+            throw new Error(data.error || 'Error al reportar');
+        }
+        showToast('🚩 ' + (data.message || 'Publicación reportada'), 'success');
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
 // ==================== FUNCIONES DE ADMINISTRADOR (SUPERADMIN) ====================
 
 // Manejo genérico de respuesta de acción admin
@@ -4120,6 +4173,23 @@ async function grantTempAdmin(userId, username) {
     }
 }
 
+// Descartar los reportes de una publicación (marcarla como revisada)
+async function dismissReports(postId) {
+    if (!isSuperUser()) return;
+    if (!confirm('¿Descartar los reportes de esta publicación? (la quita de la bandeja sin borrarla)')) return;
+    try {
+        const response = await fetch(`/api/posts/${postId}/dismiss-reports`, {
+            method: 'POST',
+            headers: adminHeaders()
+        });
+        await handleAdminResponse(response);
+        showToast('✅ Reportes descartados', 'success');
+        loadAdminPanel();
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
 // ---- Panel de administrador ----
 
 function openAdminPanel() {
@@ -4170,21 +4240,25 @@ async function loadAdminPanel() {
                 <div class="admin-stat-card"><span class="admin-stat-num">${s.totalUsers}</span><span class="admin-stat-label">Usuarios</span></div>
                 <div class="admin-stat-card"><span class="admin-stat-num">${s.totalComments}</span><span class="admin-stat-label">Comentarios</span></div>
                 <div class="admin-stat-card"><span class="admin-stat-num">${s.totalLikes}</span><span class="admin-stat-label">Likes</span></div>
+                <div class="admin-stat-card ${s.totalReported > 0 ? 'alert' : ''}"><span class="admin-stat-num">${s.totalReported}</span><span class="admin-stat-label">Reportadas</span></div>
             </div>
         `;
 
-        const postsHTML = data.recentPosts.length ? data.recentPosts.map(p => `
-            <div class="admin-tray-item">
+        const reported = data.reportedPosts || [];
+        const postsHTML = reported.length ? reported.map(p => `
+            <div class="admin-tray-item reported">
+                <div class="admin-report-badge" title="${p.reportCount} reporte(s)">🚩 ${p.reportCount}</div>
                 <div class="admin-tray-info">
                     <span class="admin-tray-title">${p.pinned ? '📌 ' : ''}${escapeHtml(p.title)}</span>
                     <span class="admin-tray-meta">${p.authorRole === 'superadmin' ? '👑 ' : ''}@${escapeHtml(p.author)} · ❤️ ${p.likes} · 💬 ${p.comments} · 🖼️ ${p.images}</span>
                 </div>
                 <div class="admin-tray-actions">
+                    <button class="admin-mini-btn" onclick="dismissReports('${p._id}')" title="Descartar reportes (marcar como revisada)">✅</button>
                     <button class="admin-mini-btn ${p.pinned ? 'active' : ''}" onclick="togglePin('${p._id}')" title="Fijar/Desfijar">📌</button>
                     <button class="admin-mini-btn danger" onclick="adminDeletePost('${p._id}')" title="Borrar">🗑️</button>
                 </div>
             </div>
-        `).join('') : '<p class="admin-empty">No hay publicaciones</p>';
+        `).join('') : '<p class="admin-empty">✅ No hay publicaciones reportadas</p>';
 
         const usersHTML = data.users.length ? data.users.map(u => `
             <div class="admin-user-item ${u.banned ? 'banned' : ''}">
@@ -4208,7 +4282,7 @@ async function loadAdminPanel() {
         body.innerHTML = `
             ${statsHTML}
             <div class="admin-section">
-                <h3>📥 Bandeja de publicaciones</h3>
+                <h3>🚩 Bandeja de publicaciones reportadas</h3>
                 <div class="admin-tray">${postsHTML}</div>
             </div>
             <div class="admin-section">

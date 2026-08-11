@@ -189,6 +189,21 @@ const postSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  reports: [{
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    reason: {
+      type: String,
+      default: ''
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   createdAt: {
     type: Date,
     default: Date.now
@@ -863,7 +878,48 @@ app.post('/api/posts', upload.array('images', 5), async (req, res) => {
 
 
 
+// Reportar una publicación (cualquier usuario logueado, una vez por usuario)
+app.post('/api/posts/:postId/report', async (req, res) => {
+  try {
+    const { userId, reason } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: 'Debes iniciar sesión para reportar' });
+    }
+    const post = await Post.findById(req.params.postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Publicación no encontrada' });
+    }
+    // Evitar reportes duplicados del mismo usuario
+    const alreadyReported = post.reports.some(r => r.userId.toString() === userId);
+    if (alreadyReported) {
+      return res.status(400).json({ error: 'Ya reportaste esta publicación', reportCount: post.reports.length });
+    }
+    post.reports.push({ userId, reason: reason || '' });
+    await post.save();
+    res.json({ message: 'Publicación reportada. Gracias por avisar.', reportCount: post.reports.length });
+  } catch (error) {
+    console.error('Error al reportar publicación:', error);
+    res.status(500).json({ error: 'Error al reportar la publicación' });
+  }
+});
+
 // ==================== RUTAS DE ADMINISTRADOR (SUPERADMIN) ====================
+
+// Descartar (limpiar) los reportes de una publicación
+app.post('/api/posts/:postId/dismiss-reports', requireAdmin, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Publicación no encontrada' });
+    }
+    post.reports = [];
+    await post.save();
+    res.json({ message: 'Reportes descartados' });
+  } catch (error) {
+    console.error('Error al descartar reportes:', error);
+    res.status(500).json({ error: 'Error al descartar los reportes' });
+  }
+});
 
 // Borrar cualquier publicación
 app.delete('/api/posts/:postId', requireAdmin, async (req, res) => {
@@ -1005,12 +1061,11 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
       }
     });
 
-    // Bandeja: publicaciones más recientes
-    const recentPosts = await Post.find()
+    // Bandeja: publicaciones REPORTADAS, ordenadas por número de reportes (mayor primero)
+    const reportedRaw = await Post.find({ 'reports.0': { $exists: true } })
       .populate('userId', 'username role')
-      .sort({ createdAt: -1 })
-      .limit(30)
-      .select('title description userId createdAt pinned likes comments images');
+      .select('title description userId createdAt pinned likes comments images reports');
+    reportedRaw.sort((a, b) => (b.reports.length - a.reports.length));
 
     // Lista de usuarios
     const users = await User.find()
@@ -1029,8 +1084,14 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
     }));
 
     res.json({
-      stats: { totalPosts, totalUsers, totalComments, totalLikes },
-      recentPosts: recentPosts.map(p => ({
+      stats: {
+        totalPosts,
+        totalUsers,
+        totalComments,
+        totalLikes,
+        totalReported: reportedRaw.length
+      },
+      reportedPosts: reportedRaw.map(p => ({
         _id: p._id,
         title: p.title,
         author: p.userId ? p.userId.username : 'Usuario eliminado',
@@ -1039,7 +1100,8 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
         pinned: p.pinned,
         likes: p.likes ? p.likes.length : 0,
         comments: p.comments ? p.comments.length : 0,
-        images: p.images ? p.images.length : 0
+        images: p.images ? p.images.length : 0,
+        reportCount: p.reports.length
       })),
       users: usersOut
     });
