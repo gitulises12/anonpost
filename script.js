@@ -200,7 +200,7 @@ function createPostCard(post) {
         </div>
     ` : '';
     
-    const authorName = post.userId && post.userId.username ? post.userId.username : 'Usuario eliminado';
+    const authorName = post.userId && post.userId.username ? escapeHtml(post.userId.username) : 'Usuario eliminado';
     const authorId = post.userId && post.userId._id ? post.userId._id : null;
     const authorRole = post.userId && post.userId.role ? post.userId.role : null;
     const isSuperAuthor = authorRole === 'superadmin';
@@ -244,8 +244,8 @@ function createPostCard(post) {
         </div>
 
         <div class="post-content">
-            <h3 class="post-title">${post.title}</h3>
-            <p class="post-description">${post.description}</p>
+            <h3 class="post-title">${escapeHtml(post.title)}</h3>
+            <p class="post-description">${escapeHtml(post.description)}</p>
             ${imagesHtml}
         </div>
 
@@ -432,7 +432,7 @@ function showUserInterface() {
     // Mostrar nombre (dorado + corona si es SUPERADMIN)
     const userEl = document.getElementById('currentUser');
     if (isSuperUser()) {
-        userEl.innerHTML = `👑 @${currentUser.username}`;
+        userEl.innerHTML = `👑 @${escapeHtml(currentUser.username)}`;
         userEl.classList.add('superadmin-name');
     } else {
         userEl.textContent = `@${currentUser.username}`;
@@ -636,8 +636,8 @@ function showProfileModal(profileData) {
         
         return `
             <div class="profile-post">
-                <h4 class="post-title">${post.title}</h4>
-                <p class="post-description">${post.description}</p>
+                <h4 class="post-title">${escapeHtml(post.title)}</h4>
+                <p class="post-description">${escapeHtml(post.description)}</p>
                 ${imageHtml}
                 <span class="post-date" data-created="${post.createdAt}">${formatDate(post.createdAt)}</span>
             </div>
@@ -648,7 +648,7 @@ function showProfileModal(profileData) {
         <div class="modal-overlay" onclick="closeProfileModal()">
             <div class="modal-content profile-content" onclick="event.stopPropagation()">
                 <div class="profile-header">
-                    <h2>@${profileData.user.username}</h2>
+                    <h2>@${escapeHtml(profileData.user.username)}</h2>
                     <button class="modal-close" onclick="closeProfileModal()">×</button>
                 </div>
                 <div class="profile-stats">
@@ -680,7 +680,7 @@ function createModalCommentHTML(comment, postId) {
     const commentLikesCount = comment.likes ? comment.likes.length : 0;
     const userHasLikedComment = comment.likes && currentUser ? comment.likes.some(like => like.userId === currentUser._id) : false;
     const isSuperAuthor = comment.userId && comment.userId.role === 'superadmin';
-    const authorName = comment.userId && comment.userId.username ? comment.userId.username : 'Usuario eliminado';
+    const authorName = comment.userId && comment.userId.username ? escapeHtml(comment.userId.username) : 'Usuario eliminado';
     const authorLabel = isSuperAuthor ? `👑 @${authorName}` : `@${authorName}`;
 
     const adminDelete = isSuperUser() ? `
@@ -696,7 +696,7 @@ function createModalCommentHTML(comment, postId) {
                 <span class="modal-comment-date">${formatDate(comment.createdAt)}</span>
             </div>
             <div class="modal-comment-content">
-                <p>${comment.content}</p>
+                <p>${escapeHtml(comment.content)}</p>
             </div>
             <div class="modal-comment-actions">
                 <button class="modal-comment-like-btn ${userHasLikedComment ? 'liked' : ''}" onclick="toggleModalCommentLike('${postId}', '${comment._id}', this)" ${!currentUser ? 'disabled' : ''}>
@@ -723,7 +723,7 @@ function createModalReplyHTML(reply, postId, commentId) {
     const replyLikesCount = reply.likes ? reply.likes.length : 0;
     const userHasLikedReply = reply.likes && currentUser ? reply.likes.some(like => like.userId === currentUser._id) : false;
     const isSuperAuthor = reply.userId && reply.userId.role === 'superadmin';
-    const authorName = reply.userId && reply.userId.username ? reply.userId.username : 'Usuario eliminado';
+    const authorName = reply.userId && reply.userId.username ? escapeHtml(reply.userId.username) : 'Usuario eliminado';
     const authorLabel = isSuperAuthor ? `👑 @${authorName}` : `@${authorName}`;
 
     const adminDelete = isSuperUser() ? `
@@ -737,7 +737,7 @@ function createModalReplyHTML(reply, postId, commentId) {
                 <span class="modal-reply-date">${formatDate(reply.createdAt)}</span>
             </div>
             <div class="modal-reply-content">
-                <p>${reply.content}</p>
+                <p>${escapeHtml(reply.content)}</p>
             </div>
             <div class="modal-reply-actions">
                 <button class="modal-reply-like-btn ${userHasLikedReply ? 'liked' : ''}" onclick="toggleModalReplyLike('${postId}', '${commentId}', '${reply._id}', this)" ${!currentUser ? 'disabled' : ''}>
@@ -756,7 +756,7 @@ function createModalReplyHTML(reply, postId, commentId) {
 function createReplyHTML(reply, postId, commentId) {
     const replyLikesCount = reply.likes ? reply.likes.length : 0;
     const userHasLikedReply = reply.likes && currentUser ? reply.likes.some(like => like.userId === currentUser._id) : false;
-    const authorName = reply.userId && reply.userId.username ? reply.userId.username : 'Usuario eliminado';
+    const authorName = reply.userId && reply.userId.username ? escapeHtml(reply.userId.username) : 'Usuario eliminado';
     
     return `
         <div class="reply" data-reply-id="${reply._id}">
@@ -765,7 +765,7 @@ function createReplyHTML(reply, postId, commentId) {
                 <span class="reply-date">${formatDate(reply.createdAt)}</span>
             </div>
             <div class="reply-content">
-                <p>${reply.content}</p>
+                <p>${escapeHtml(reply.content)}</p>
             </div>
             <div class="reply-actions">
                 <button class="reply-like-btn ${userHasLikedReply ? 'liked' : ''}" onclick="toggleReplyLike('${postId}', '${commentId}', '${reply._id}', this)" ${!currentUser ? 'disabled' : ''}>
@@ -791,7 +791,7 @@ function openCommentsModal(postId) {
     modal.id = `comments-modal-${postId}`;
     
     // Crear el contenido del post para contexto
-    const authorName = post.userId && post.userId.username ? post.userId.username : 'Usuario eliminado';
+    const authorName = post.userId && post.userId.username ? escapeHtml(post.userId.username) : 'Usuario eliminado';
     const authorId = post.userId && post.userId._id ? post.userId._id : null;
     
     const imagesHtml = post.images && post.images.length > 0 ? `
@@ -832,8 +832,8 @@ function openCommentsModal(postId) {
                         <span class="modal-post-date">${formatDate(post.createdAt)}</span>
                     </div>
                     <div class="modal-post-content">
-                        <h4 class="modal-post-title">${post.title}</h4>
-                        <p class="modal-post-description">${post.description}</p>
+                        <h4 class="modal-post-title">${escapeHtml(post.title)}</h4>
+                        <p class="modal-post-description">${escapeHtml(post.description)}</p>
                         ${imagesHtml}
                     </div>
                 </div>

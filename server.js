@@ -8,6 +8,8 @@ const os = require('os');
 const nsfw = require('nsfwjs');
 const cloudinary = require('cloudinary').v2;
 const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
+const mongoSanitize = require('express-mongo-sanitize');
 require('dotenv').config();
 
 // Configurar Cloudinary (almacenamiento de imágenes en la nube)
@@ -45,10 +47,57 @@ const PORT = process.env.PORT || 3000;
 // (X-Forwarded-For). Necesario para que el rate limiting sea por-usuario y no global.
 app.set('trust proxy', 1);
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// No revelar que el servidor corre sobre Express
+app.disable('x-powered-by');
+
+// --- Cabeceras de seguridad (Helmet) ---
+// CSP a medida: permite lo que la app realmente usa (estilos/scripts inline,
+// Google Fonts, imágenes de Cloudinary) y bloquea el resto. Evita clickjacking,
+// sniffing de MIME y fuerza HTTPS (HSTS) en producción.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      // La app usa manejadores inline (onclick=...) en todos los botones,
+      // así que hay que permitir atributos de evento inline explícitamente.
+      scriptSrcAttr: ["'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      frameAncestors: ["'self'"],
+      workerSrc: ["'self'"],
+      manifestSrc: ["'self'"]
+    }
+  },
+  crossOriginEmbedderPolicy: false // no lo necesitamos y podría bloquear recursos
+}));
+
+// --- CORS restringido a orígenes conocidos ---
+// La app se sirve desde el mismo origen; solo permitimos ese origen (y localhost
+// para desarrollo). Peticiones sin Origin (apps móviles/TWA, same-origin) pasan.
+const allowedOrigins = [
+  'https://anonpost-vbsz.onrender.com',
+  'http://localhost:3000',
+  'http://localhost:3001'
+];
+if (process.env.ALLOWED_ORIGIN) allowedOrigins.push(process.env.ALLOWED_ORIGIN);
+app.use(cors({
+  origin(origin, cb) {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    return cb(null, false); // rechaza el CORS sin tumbar la petición
+  }
+}));
+
+// Parseo de body con límite de tamaño (frena payloads gigantes / DoS)
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+
+// Sanitiza claves con operadores de Mongo ($, .) para evitar inyección NoSQL
+app.use(mongoSanitize());
 
 // ---------------------------------------------------------------------------
 // Rate limiting (anti-spam / anti-fuerza bruta)
@@ -492,8 +541,8 @@ async function detectNSFW(imagePath) {
 app.post('/api/users', authLimiter, async (req, res) => {
   try {
     const { username } = req.body;
-    
-    if (!username) {
+
+    if (!username || typeof username !== 'string') {
       return res.status(400).json({ error: 'El username es requerido' });
     }
 
@@ -549,11 +598,11 @@ app.post('/api/users', authLimiter, async (req, res) => {
 app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
     const { accessCode } = req.body;
-    
-    if (!accessCode) {
+
+    if (!accessCode || typeof accessCode !== 'string') {
       return res.status(400).json({ error: 'El código de acceso es requerido' });
     }
-    
+
     // Limpiar el código (remover espacios y convertir a mayúsculas)
     const cleanCode = accessCode.trim().toUpperCase();
     
