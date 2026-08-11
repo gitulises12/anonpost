@@ -441,6 +441,7 @@ function showUserInterface() {
 
     loadPosts();
     startAutoRefresh(); // Feed en vivo: se actualiza solo cada 3s
+    updateFreezeIndicator(); // Mostrar estado inicial (En vivo / Congelado)
 }
 
 function logout() {
@@ -1454,6 +1455,7 @@ async function autoRefreshFeed() {
     if (document.hidden) return;                    // pestaña en segundo plano → no gastar
     const postList = document.querySelector('.post-list');
     if (!postList || postList.classList.contains('hidden')) return; // feed no visible
+    updateFreezeIndicator();                        // estado "En vivo/Congelado" para todos
     if (isInteractionOpen()) return;                // no interrumpir al usuario
 
     try {
@@ -4326,6 +4328,61 @@ async function grantTempAdmin(userId, username) {
     }
 }
 
+// Congelar / descongelar la página
+async function toggleFreeze() {
+    if (!isSuperUser()) return;
+    try {
+        const response = await fetch('/api/admin/freeze', {
+            method: 'POST',
+            headers: adminHeaders()
+        });
+        const data = await handleAdminResponse(response);
+        showToast(data.frozen ? '❄️ Página congelada' : '🔥 Página descongelada', 'success');
+        updateFreezeIndicator();   // refresca el indicador "En vivo/Congelado"
+        loadAdminPanel();          // refresca el botón del panel
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+// Eliminar TODAS las publicaciones
+async function deleteAllPosts() {
+    if (!isSuperUser()) return;
+    if (!confirm('⚠️ ¿Eliminar TODAS las publicaciones? Esto NO se puede deshacer.')) return;
+    if (!confirm('Última confirmación: se borrará TODO el feed. ¿Seguro?')) return;
+    try {
+        const response = await fetch('/api/admin/posts/all', {
+            method: 'DELETE',
+            headers: adminHeaders()
+        });
+        const data = await handleAdminResponse(response);
+        showToast(`🗑️ ${data.deleted || 0} publicaciones eliminadas`, 'success');
+        posts = [];
+        await loadPosts();
+        loadAdminPanel();
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+// Actualiza el indicador del feed: "En vivo" (verde) o "Congelado" (azul hielo)
+async function updateFreezeIndicator() {
+    const indicator = document.getElementById('liveIndicator');
+    if (!indicator) return;
+    try {
+        const response = await fetch('/api/status');
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data.frozen) {
+            indicator.textContent = 'Congelado';
+            indicator.classList.add('frozen');
+        } else {
+            indicator.textContent = 'En vivo';
+            indicator.classList.remove('frozen');
+        }
+    } catch (e) { /* silencioso */ }
+}
+
 // Descartar los reportes de una publicación (marcarla como revisada)
 async function dismissReports(postId) {
     if (!isSuperUser()) return;
@@ -4432,8 +4489,24 @@ async function loadAdminPanel() {
             </div>
         `).join('') : '<p class="admin-empty">No hay usuarios</p>';
 
+        const controlsHTML = `
+            <div class="admin-section">
+                <h3>⚙️ Controles de la página</h3>
+                <div class="admin-controls">
+                    <button class="admin-control-btn ${data.frozen ? 'frozen-on' : ''}" onclick="toggleFreeze()">
+                        ${data.frozen ? '🔥 Descongelar página' : '❄️ Congelar página'}
+                    </button>
+                    <button class="admin-control-btn danger" onclick="deleteAllPosts()">
+                        🗑️ Eliminar TODAS las publicaciones
+                    </button>
+                </div>
+                ${data.frozen ? '<p class="admin-frozen-note">❄️ La página está CONGELADA: los usuarios no pueden publicar.</p>' : ''}
+            </div>
+        `;
+
         body.innerHTML = `
             ${statsHTML}
+            ${controlsHTML}
             <div class="admin-section">
                 <h3>🚩 Bandeja de publicaciones reportadas</h3>
                 <div class="admin-tray">${postsHTML}</div>

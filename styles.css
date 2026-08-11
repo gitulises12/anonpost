@@ -1062,3 +1062,50 @@ img, video { max-width: 100%; height: auto; }
     .logo { font-size: 18px; }
     .admin-panel-btn, .new-post-btn, .logout-btn { padding: 6px 9px; font-size: 11px; }
 }
+
+
+/* ==================== CONTROLES DE PÁGINA (congelar / borrar todo) ==================== */
+
+.admin-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.admin-control-btn {
+    background: #000000;
+    border: 1px solid #333333;
+    color: #ffffff;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, transform 0.15s;
+    text-align: center;
+}
+.admin-control-btn:hover { background: #1a1d21; transform: translateY(-1px); }
+.admin-control-btn.frozen-on {
+    background: rgba(56, 189, 248, 0.15);
+    border-color: #38bdf8;
+    color: #7dd3fc;
+}
+.admin-control-btn.danger {
+    background: rgba(220, 38, 38, 0.12);
+    border-color: rgba(220, 38, 38, 0.4);
+    color: #f87171;
+}
+.admin-control-btn.danger:hover { background: rgba(220, 38, 38, 0.25); border-color: #dc2626; }
+.admin-frozen-note {
+    margin-top: 10px;
+    font-size: 13px;
+    color: #7dd3fc;
+    text-align: center;
+    font-weight: 600;
+}
+
+/* Indicador del feed cuando está CONGELADO (azul hielo, sin pulso verde) */
+.live-indicator.frozen { color: #38bdf8; }
+.live-indicator.frozen::before {
+    background: #38bdf8;
+    animation: none;
+}

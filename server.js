@@ -244,6 +244,19 @@ const postSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 const Post = mongoose.model('Post', postSchema);
 
+// Configuración global de la app (documento único). Ej: modo "congelado".
+const settingSchema = new mongoose.Schema({
+  frozen: { type: Boolean, default: false }
+});
+const Setting = mongoose.model('Setting', settingSchema);
+
+// Obtiene (o crea) el documento único de configuración
+async function getSettings() {
+  let s = await Setting.findOne();
+  if (!s) s = await Setting.create({ frozen: false });
+  return s;
+}
+
 
 // ==================== HELPERS DE ADMINISTRADOR ====================
 
@@ -848,6 +861,14 @@ app.post('/api/posts', upload.array('images', 5), async (req, res) => {
       return res.status(403).json({ error: 'Tu cuenta está baneada y no puede publicar' });
     }
 
+    // Si la página está congelada, solo el SUPERADMIN puede publicar
+    if (user.role !== 'superadmin') {
+      const settings = await getSettings();
+      if (settings.frozen) {
+        return res.status(403).json({ error: '❄️ La página está congelada temporalmente. No se pueden crear publicaciones ahora mismo.' });
+      }
+    }
+
     // Límite de 3 publicaciones activas por usuario (el SUPERADMIN está exento)
     if (user.role !== 'superadmin') {
       const activePosts = await Post.countDocuments({ userId });
@@ -933,6 +954,16 @@ app.post('/api/posts', upload.array('images', 5), async (req, res) => {
 
 
 
+// Estado público de la app (para mostrar "En vivo" / "Congelado" a todos)
+app.get('/api/status', async (req, res) => {
+  try {
+    const s = await getSettings();
+    res.json({ frozen: s.frozen });
+  } catch (error) {
+    res.json({ frozen: false });
+  }
+});
+
 // Reportar una publicación (cualquier usuario logueado, una vez por usuario)
 app.post('/api/posts/:postId/report', async (req, res) => {
   try {
@@ -963,6 +994,39 @@ app.post('/api/posts/:postId/report', async (req, res) => {
 });
 
 // ==================== RUTAS DE ADMINISTRADOR (SUPERADMIN) ====================
+
+// Congelar / descongelar la página (bloquea nuevas publicaciones de usuarios)
+app.post('/api/admin/freeze', requireAdmin, async (req, res) => {
+  try {
+    const s = await getSettings();
+    s.frozen = !s.frozen;
+    await s.save();
+    res.json({ message: s.frozen ? '❄️ Página congelada' : '🔥 Página descongelada', frozen: s.frozen });
+  } catch (error) {
+    console.error('Error al congelar:', error);
+    res.status(500).json({ error: 'Error al cambiar el estado de congelado' });
+  }
+});
+
+// Eliminar TODAS las publicaciones
+app.delete('/api/admin/posts/all', requireAdmin, async (req, res) => {
+  try {
+    // Best-effort: borrar imágenes de Cloudinary asociadas
+    const all = await Post.find().select('images');
+    for (const p of all) {
+      if (p.images) {
+        for (const img of p.images) {
+          if (img.publicId) cloudinary.uploader.destroy(img.publicId).catch(() => {});
+        }
+      }
+    }
+    const result = await Post.deleteMany({});
+    res.json({ message: 'Todas las publicaciones fueron eliminadas', deleted: result.deletedCount });
+  } catch (error) {
+    console.error('Error al eliminar todas las publicaciones:', error);
+    res.status(500).json({ error: 'Error al eliminar las publicaciones' });
+  }
+});
 
 // Editar (modificar) el título y/o descripción de cualquier publicación
 app.put('/api/posts/:postId', requireAdmin, async (req, res) => {
@@ -1177,7 +1241,9 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
       createdAt: u.createdAt
     }));
 
+    const settings = await getSettings();
     res.json({
+      frozen: settings.frozen,
       stats: {
         totalPosts,
         totalUsers,
