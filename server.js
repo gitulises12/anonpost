@@ -362,7 +362,8 @@ async function generateUniqueAccessCode() {
 
 // Función para filtrar contenido ofensivo
 function filterOffensiveContent(text) {
-  let filteredText = text.toLowerCase();
+  // Mantenemos el texto original (con mayúsculas). El filtro es insensible a mayúsculas (flag 'i').
+  let filteredText = text;
 
   offensiveWords.forEach(word => {
     const regex = new RegExp(`\\b${word}\\b`, 'gi');
