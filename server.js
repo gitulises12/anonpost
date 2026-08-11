@@ -922,9 +922,13 @@ app.post('/api/posts/:postId/report', async (req, res) => {
     if (!userId) {
       return res.status(400).json({ error: 'Debes iniciar sesión para reportar' });
     }
-    const post = await Post.findById(req.params.postId);
+    const post = await Post.findById(req.params.postId).populate('userId', 'role');
     if (!post) {
       return res.status(404).json({ error: 'Publicación no encontrada' });
+    }
+    // Las publicaciones del SUPERADMIN no se pueden reportar
+    if (post.userId && post.userId.role === 'superadmin') {
+      return res.status(403).json({ error: 'No se puede reportar una publicación del administrador' });
     }
     // Evitar reportes duplicados del mismo usuario
     const alreadyReported = post.reports.some(r => r.userId.toString() === userId);

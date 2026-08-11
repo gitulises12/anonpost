@@ -225,12 +225,13 @@ function createPostCard(post) {
                 <span class="post-author ${authorId ? 'clickable-author' : ''} ${isSuperAuthor ? 'superadmin-name' : ''}" ${authorId ? `onclick="viewProfile('${authorId}')"` : ''}>${authorLabel}</span>
                 <span class="post-date">${formatDate(post.createdAt)}</span>
             </div>
+            ${isSuperAuthor ? '' : `
             <div class="post-menu">
                 <button class="post-menu-btn" onclick="togglePostMenu(event, '${post._id}')" title="Opciones">⋮</button>
                 <div class="post-menu-dropdown hidden" id="post-menu-${post._id}">
                     <button class="post-menu-option" onclick="reportPost('${post._id}')">🚩 Reportar publicación</button>
                 </div>
-            </div>
+            </div>`}
         </div>
 
         <div class="post-content">
