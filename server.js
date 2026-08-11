@@ -7,6 +7,7 @@ const fs = require('fs');
 const os = require('os');
 const nsfw = require('nsfwjs');
 const cloudinary = require('cloudinary').v2;
+const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 // Configurar Cloudinary (almacenamiento de imágenes en la nube)
@@ -40,10 +41,50 @@ function uploadToCloudinary(buffer) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Estamos detrás del proxy de Render: confiar en 1 salto para leer la IP real
+// (X-Forwarded-For). Necesario para que el rate limiting sea por-usuario y no global.
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ---------------------------------------------------------------------------
+// Rate limiting (anti-spam / anti-fuerza bruta)
+// Se aplica SOLO a operaciones de escritura y login. Las lecturas (GET) quedan
+// libres porque el feed y el chat hacen polling cada pocos segundos.
+// ---------------------------------------------------------------------------
+const rateLimitHandler = (mensaje) => (req, res) => {
+  res.status(429).json({ error: mensaje });
+};
+
+// Login y registro: protege contra fuerza bruta de códigos y creación masiva de cuentas.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  limit: 30,                // 30 intentos por IP en la ventana
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  handler: rateLimitHandler('Demasiados intentos. Espera unos minutos e inténtalo de nuevo.')
+});
+
+// Escrituras generales: likes, comentarios, respuestas, reportes, chat.
+const writeLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minuto
+  limit: 60,           // 60 acciones por IP por minuto
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  handler: rateLimitHandler('Vas demasiado rápido. Espera un momento antes de continuar.')
+});
+
+// Creación de publicaciones: más estricto (suben imágenes + análisis NSFW).
+const createPostLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutos
+  limit: 15,                // 15 publicaciones por IP cada 10 minutos
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  handler: rateLimitHandler('Has publicado demasiado en poco tiempo. Espera unos minutos.')
+});
 
 // Servir archivos estáticos
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -448,7 +489,7 @@ async function detectNSFW(imagePath) {
 }
 
 // Rutas de usuarios
-app.post('/api/users', async (req, res) => {
+app.post('/api/users', authLimiter, async (req, res) => {
   try {
     const { username } = req.body;
     
@@ -505,7 +546,7 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
     const { accessCode } = req.body;
     
@@ -581,7 +622,7 @@ app.get('/api/users/:userId', async (req, res) => {
 });
 
 // Rutas de likes
-app.post('/api/posts/:postId/like', async (req, res) => {
+app.post('/api/posts/:postId/like', writeLimiter, async (req, res) => {
   try {
     const { postId } = req.params;
     const { userId } = req.body;
@@ -643,7 +684,7 @@ app.post('/api/posts/:postId/like', async (req, res) => {
 });
 
 // Rutas de comentarios
-app.post('/api/posts/:postId/comments', async (req, res) => {
+app.post('/api/posts/:postId/comments', writeLimiter, async (req, res) => {
   try {
     const { postId } = req.params;
     const { userId, content } = req.body;
@@ -697,7 +738,7 @@ app.post('/api/posts/:postId/comments', async (req, res) => {
   }
 });
 
-app.post('/api/posts/:postId/comments/:commentId/replies', async (req, res) => {
+app.post('/api/posts/:postId/comments/:commentId/replies', writeLimiter, async (req, res) => {
   try {
     const { postId, commentId } = req.params;
     const { userId, content } = req.body;
@@ -758,7 +799,7 @@ app.post('/api/posts/:postId/comments/:commentId/replies', async (req, res) => {
   }
 });
 
-app.post('/api/posts/:postId/comments/:commentId/like', async (req, res) => {
+app.post('/api/posts/:postId/comments/:commentId/like', writeLimiter, async (req, res) => {
   try {
     const { postId, commentId } = req.params;
     const { userId } = req.body;
@@ -819,7 +860,7 @@ app.post('/api/posts/:postId/comments/:commentId/like', async (req, res) => {
   }
 });
 
-app.post('/api/posts/:postId/comments/:commentId/replies/:replyId/like', async (req, res) => {
+app.post('/api/posts/:postId/comments/:commentId/replies/:replyId/like', writeLimiter, async (req, res) => {
   try {
     const { postId, commentId, replyId } = req.params;
     const { userId } = req.body;
@@ -929,7 +970,7 @@ app.get('/api/posts', async (req, res) => {
   }
 });
 
-app.post('/api/posts', upload.array('images', 5), async (req, res) => {
+app.post('/api/posts', createPostLimiter, upload.array('images', 5), async (req, res) => {
   try {
     const { title, description, userId } = req.body;
     
@@ -1051,7 +1092,7 @@ app.get('/api/status', async (req, res) => {
 });
 
 // Reportar una publicación (cualquier usuario logueado, una vez por usuario)
-app.post('/api/posts/:postId/report', async (req, res) => {
+app.post('/api/posts/:postId/report', writeLimiter, async (req, res) => {
   try {
     const { userId, reason } = req.body;
     if (!userId) {
@@ -1405,7 +1446,7 @@ app.get('/api/chat', async (req, res) => {
 });
 
 // Enviar un mensaje al chat
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', writeLimiter, async (req, res) => {
   try {
     const { userId, content, replyToId } = req.body;
     if (!userId || !content || !content.trim()) {
