@@ -209,6 +209,13 @@ const postSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Fecha de expiración: MongoDB borra el post automáticamente al llegar esta fecha.
+  // Si es null (ej. posts fijados), el post NO expira.
+  expiresAt: {
+    type: Date,
+    default: null,
+    expires: 0
+  },
   reports: [{
     userId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -841,6 +848,14 @@ app.post('/api/posts', upload.array('images', 5), async (req, res) => {
       return res.status(403).json({ error: 'Tu cuenta está baneada y no puede publicar' });
     }
 
+    // Límite de 3 publicaciones activas por usuario (el SUPERADMIN está exento)
+    if (user.role !== 'superadmin') {
+      const activePosts = await Post.countDocuments({ userId });
+      if (activePosts >= 3) {
+        return res.status(400).json({ error: 'Solo puedes tener 3 publicaciones activas al mismo tiempo. Espera a que alguna expire (duran 1 hora).' });
+      }
+    }
+
     // Filtrar contenido ofensivo
     const filteredTitle = filterOffensiveContent(title);
     const filteredDescription = filterOffensiveContent(description);
@@ -890,12 +905,15 @@ app.post('/api/posts', upload.array('images', 5), async (req, res) => {
     }
     
     // Crear nueva publicación
+    // Los posts expiran (se borran solos) 1 hora después de crearse
+    const ONE_HOUR = 60 * 60 * 1000;
     const newPost = new Post({
       title: filteredTitle,
       description: filteredDescription,
       images: images,
       userId: userId,
-      isNSFW: hasNSFWContent
+      isNSFW: hasNSFWContent,
+      expiresAt: new Date(Date.now() + ONE_HOUR)
     });
     
     const savedPost = await newPost.save();
@@ -946,6 +964,31 @@ app.post('/api/posts/:postId/report', async (req, res) => {
 
 // ==================== RUTAS DE ADMINISTRADOR (SUPERADMIN) ====================
 
+// Editar (modificar) el título y/o descripción de cualquier publicación
+app.put('/api/posts/:postId', requireAdmin, async (req, res) => {
+  try {
+    const { title, description } = req.body;
+    if ((!title || !title.trim()) && (!description || !description.trim())) {
+      return res.status(400).json({ error: 'Debes enviar un título o una descripción' });
+    }
+    const post = await Post.findById(req.params.postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Publicación no encontrada' });
+    }
+    if (title && title.trim()) post.title = title.trim().substring(0, 200);
+    if (description && description.trim()) post.description = description.trim().substring(0, 2000);
+    await post.save();
+    const updated = await Post.findById(post._id)
+      .populate('userId', 'username role')
+      .populate('comments.userId', 'username role')
+      .populate('comments.replies.userId', 'username role');
+    res.json({ message: 'Publicación modificada', post: updated });
+  } catch (error) {
+    console.error('Error al editar publicación:', error);
+    res.status(500).json({ error: 'Error al editar la publicación' });
+  }
+});
+
 // Descartar (limpiar) los reportes de una publicación
 app.post('/api/posts/:postId/dismiss-reports', requireAdmin, async (req, res) => {
   try {
@@ -995,8 +1038,14 @@ app.post('/api/posts/:postId/pin', requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Publicación no encontrada' });
     }
     post.pinned = !post.pinned;
+    // Al fijar, el post deja de expirar; al desfijar, vuelve a durar 1 hora
+    if (post.pinned) {
+      post.expiresAt = null;
+    } else {
+      post.expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    }
     await post.save();
-    res.json({ message: post.pinned ? 'Publicación fijada' : 'Publicación desfijada', pinned: post.pinned });
+    res.json({ message: post.pinned ? 'Publicación fijada (ya no expira)' : 'Publicación desfijada', pinned: post.pinned });
   } catch (error) {
     console.error('Error al fijar publicación:', error);
     res.status(500).json({ error: 'Error al fijar la publicación' });

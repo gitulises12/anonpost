@@ -205,6 +205,9 @@ function createPostCard(post) {
     // Controles exclusivos del SUPERADMIN
     const adminControls = isSuperUser() ? `
         <div class="post-admin-actions">
+            <button class="admin-edit-btn" onclick="adminEditPost('${post._id}')" title="Editar publicación">
+                ✏️ Editar
+            </button>
             <button class="admin-pin-btn ${post.pinned ? 'pinned' : ''}" onclick="togglePin('${post._id}')" title="${post.pinned ? 'Desfijar' : 'Fijar arriba'}">
                 ${post.pinned ? '📌 Fijado' : '📌 Fijar'}
             </button>
@@ -4084,6 +4087,73 @@ async function adminDeletePost(postId) {
         await handleAdminResponse(response);
         showToast('🗑️ Publicación eliminada', 'success');
         posts = posts.filter(p => p._id !== postId);
+        await loadPosts();
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+// Editar una publicación (abre un modal con los campos actuales)
+function adminEditPost(postId) {
+    if (!isSuperUser()) return;
+    const post = posts.find(p => p._id === postId);
+    if (!post) { showToast('Publicación no encontrada', 'error'); return; }
+
+    let modal = document.getElementById('adminEditModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'adminEditModal';
+        modal.className = 'admin-edit-modal';
+        document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+        <div class="admin-edit-overlay" onclick="closeAdminEdit()"></div>
+        <div class="admin-edit-content">
+            <div class="admin-edit-header">
+                <h3>✏️ Editar publicación</h3>
+                <button class="admin-edit-close" onclick="closeAdminEdit()">✖️</button>
+            </div>
+            <label class="admin-edit-label">Título</label>
+            <input id="adminEditTitle" class="admin-edit-input" maxlength="200" value="">
+            <label class="admin-edit-label">Descripción</label>
+            <textarea id="adminEditDesc" class="admin-edit-textarea" maxlength="2000"></textarea>
+            <div class="admin-edit-actions">
+                <button class="admin-edit-cancel" onclick="closeAdminEdit()">Cancelar</button>
+                <button class="admin-edit-save" onclick="submitAdminEdit('${postId}')">Guardar cambios</button>
+            </div>
+        </div>
+    `;
+    // Rellenar valores de forma segura (sin romper el HTML)
+    document.getElementById('adminEditTitle').value = post.title || '';
+    document.getElementById('adminEditDesc').value = post.description || '';
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeAdminEdit() {
+    const modal = document.getElementById('adminEditModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        document.body.style.overflow = 'auto';
+    }
+}
+
+async function submitAdminEdit(postId) {
+    const title = document.getElementById('adminEditTitle').value.trim();
+    const description = document.getElementById('adminEditDesc').value.trim();
+    if (!title && !description) {
+        showToast('Escribe un título o descripción', 'error');
+        return;
+    }
+    try {
+        const response = await fetch(`/api/posts/${postId}`, {
+            method: 'PUT',
+            headers: adminHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ title, description })
+        });
+        await handleAdminResponse(response);
+        showToast('✏️ Publicación modificada', 'success');
+        closeAdminEdit();
         await loadPosts();
     } catch (error) {
         showToast(error.message, 'error');
