@@ -1015,46 +1015,14 @@ img, video { max-width: 100%; height: auto; }
 
 /* ==================== MÓVIL (≤600px) ==================== */
 @media (max-width: 600px) {
-    /* Header compacto: botones como iconos para que quepan */
+    /* Header compacto: botones con TEXTO (como en PC), solo más pequeños */
     .header-content { gap: 8px; height: 56px; }
     .header-actions { gap: 6px; }
-    .current-user { max-width: 90px; font-size: 13px; }
+    .current-user { max-width: 70px; font-size: 12px; }
 
-    .admin-panel-btn {
-        padding: 8px 10px;
-        font-size: 0;
-        border-radius: 50%;
-        width: 38px;
-        height: 38px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .admin-panel-btn::before { content: '👑'; font-size: 16px; }
-
-    .new-post-btn {
-        padding: 8px 10px;
-        font-size: 0;
-        border-radius: 50%;
-        width: 38px;
-        height: 38px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .new-post-btn::before { content: '✏️'; font-size: 15px; }
-
-    .logout-btn {
-        padding: 8px 10px;
-        font-size: 0;
-        border-radius: 50%;
-        width: 38px;
-        height: 38px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .logout-btn::before { content: '🚪'; font-size: 15px; }
+    .admin-panel-btn { padding: 6px 11px; font-size: 12px; }
+    .new-post-btn { padding: 6px 11px; font-size: 12px; }
+    .logout-btn { padding: 6px 11px; font-size: 12px; }
 
     /* Panel de admin como hoja inferior a pantalla completa */
     .admin-panel-modal { align-items: flex-end; }
@@ -1092,5 +1060,5 @@ img, video { max-width: 100%; height: auto; }
 @media (max-width: 380px) {
     .current-user { display: none; }  /* Ocultar nombre para ganar espacio */
     .logo { font-size: 18px; }
-    .admin-panel-btn, .new-post-btn, .logout-btn { width: 36px; height: 36px; }
+    .admin-panel-btn, .new-post-btn, .logout-btn { padding: 6px 9px; font-size: 11px; }
 }
