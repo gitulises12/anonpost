@@ -1161,16 +1161,22 @@ img, video { max-width: 100%; height: auto; }
 }
 
 
-/* Botón de cerrar sesión como icono (SVG de salida) */
-.logout-icon-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 38px;
-    height: 38px;
-    padding: 0 !important;
-    border-radius: 50%;
-    color: #71767b;
+/* Cerrar sesión: TEXTO en PC (por defecto), ÍCONO solo en móvil */
+.logout-svg { display: none; }
+.logout-text { display: inline; }
+
+@media (max-width: 600px) {
+    .logout-text { display: none; }
+    .logout-svg { display: block; }
+    .logout-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        padding: 0 !important;
+        border-radius: 50%;
+        color: #71767b;
+    }
+    .logout-btn:hover { background: #333333; color: #ffffff; }
 }
-.logout-icon-btn svg { display: block; }
-.logout-icon-btn:hover { background: #333333; color: #ffffff; }
