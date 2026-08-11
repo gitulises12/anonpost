@@ -1146,3 +1146,16 @@ img, video { max-width: 100%; height: auto; }
     margin-bottom: 18px;
 }
 .name-warning strong { color: #ffd94a; }
+
+
+/* Etiquetas cortas de botones del header en móvil (evita que se enciman) */
+.lbl-short { display: none; }
+@media (max-width: 600px) {
+    .lbl-full { display: none; }
+    .lbl-short { display: inline; }
+    /* Asegurar que los 3 botones quepan sin encimarse */
+    .header-actions { gap: 6px; flex-shrink: 0; }
+    .header-brand { flex-shrink: 1; overflow: hidden; }
+    .logo { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .admin-panel-btn, .new-post-btn, .logout-btn { padding: 7px 12px; font-size: 13px; }
+}
