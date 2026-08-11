@@ -440,6 +440,7 @@ function showUserInterface() {
     }
 
     loadPosts();
+    startAutoRefresh(); // Feed en vivo: se actualiza solo cada 3s
 }
 
 function logout() {
@@ -1368,38 +1369,113 @@ async function toggleLike(postId, buttonElement) {
 }
 
 // Función para cargar publicaciones
+// Firma del feed: resumen compacto para detectar si algo cambió (sin re-dibujar de más)
+function feedSignature(list) {
+    return (list || []).map(p =>
+        p._id + ':' +
+        (p.likes ? p.likes.length : 0) + ':' +
+        (p.comments ? p.comments.length : 0) + ':' +
+        (p.pinned ? 1 : 0) + ':' +
+        (p.title || '').length + ':' +
+        (p.description || '').length + ':' +
+        (p.images ? p.images.length : 0)
+    ).join('|');
+}
+
+let lastFeedSignature = '';
+
+// Dibuja el array `posts` en el contenedor (sin spinner). Se usa en cargas y auto-refresh.
+function renderPosts() {
+    const emptyState = document.getElementById('emptyState');
+    const postsContainer = document.getElementById('postsContainer');
+    if (!postsContainer) return;
+
+    postsContainer.innerHTML = '';
+    if (!posts || posts.length === 0) {
+        if (emptyState) emptyState.classList.remove('hidden');
+    } else {
+        if (emptyState) emptyState.classList.add('hidden');
+        posts.forEach(post => {
+            const postCard = createPostCard(post);
+            postCard.dataset.postId = post._id;
+            postsContainer.appendChild(postCard);
+        });
+    }
+    lastFeedSignature = feedSignature(posts);
+}
+
+// Carga inicial (con spinner)
 async function loadPosts() {
     const loadingContainer = document.getElementById('loadingContainer');
     const emptyState = document.getElementById('emptyState');
     const postsContainer = document.getElementById('postsContainer');
-    
+
     loadingContainer.classList.remove('hidden');
     emptyState.classList.add('hidden');
     postsContainer.innerHTML = '';
-    
+
     try {
         const response = await fetch('/api/posts');
         if (!response.ok) {
             throw new Error('Error al cargar las publicaciones');
         }
-        
         posts = await response.json();
-        
-        if (posts.length === 0) {
-            emptyState.classList.remove('hidden');
-        } else {
-            posts.forEach(post => {
-                const postCard = createPostCard(post);
-                postCard.dataset.postId = post._id;
-                postsContainer.appendChild(postCard);
-            });
-        }
+        renderPosts();
     } catch (error) {
         console.error('Error al cargar publicaciones:', error);
         showError('Error al cargar las publicaciones. Verifica que el servidor esté ejecutándose.');
     } finally {
         loadingContainer.classList.add('hidden');
     }
+}
+
+// ==================== AUTO-REFRESH INTELIGENTE DEL FEED ====================
+
+let autoRefreshTimer = null;
+
+// ¿Hay algo abierto que NO debemos interrumpir con un refresco?
+function isInteractionOpen() {
+    if (document.querySelector('.comments-modal')) return true;   // modal de comentarios
+    if (document.querySelector('.image-modal')) return true;       // imagen ampliada
+    if (document.querySelector('.profile-modal')) return true;     // perfil
+    const adminPanel = document.getElementById('adminPanelModal');
+    if (adminPanel && !adminPanel.classList.contains('hidden')) return true;
+    const adminEdit = document.getElementById('adminEditModal');
+    if (adminEdit && !adminEdit.classList.contains('hidden')) return true;
+    const postForm = document.getElementById('postForm');
+    if (postForm && !postForm.classList.contains('hidden')) return true; // escribiendo un post
+    if (document.querySelector('.post-menu-dropdown:not(.hidden)')) return true; // menú ⋮ abierto
+    return false;
+}
+
+// Un ciclo de refresco: solo actúa si tiene sentido y solo re-dibuja si algo cambió
+async function autoRefreshFeed() {
+    if (!currentUser) return;                       // solo si hay sesión
+    if (document.hidden) return;                    // pestaña en segundo plano → no gastar
+    const postList = document.querySelector('.post-list');
+    if (!postList || postList.classList.contains('hidden')) return; // feed no visible
+    if (isInteractionOpen()) return;                // no interrumpir al usuario
+
+    try {
+        const response = await fetch('/api/posts');
+        if (!response.ok) return;
+        const fresh = await response.json();
+        const sig = feedSignature(fresh);
+        if (sig === lastFeedSignature) return;      // nada cambió → NO tocar el DOM (sin parpadeo)
+        posts = fresh;
+        renderPosts();
+    } catch (e) {
+        // Silencioso: un fallo de red puntual no debe molestar
+    }
+}
+
+function startAutoRefresh() {
+    if (autoRefreshTimer) return;
+    autoRefreshTimer = setInterval(autoRefreshFeed, 3000); // cada 3 segundos
+    // Al volver a la pestaña, refrescar de inmediato
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) autoRefreshFeed();
+    });
 }
 
 // Función para crear nueva publicación

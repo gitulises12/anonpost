@@ -919,3 +919,29 @@ body {
     transition: background 0.15s;
 }
 .admin-edit-save:hover { background: #1a8cd8; }
+
+
+/* ==================== INDICADOR "EN VIVO" (auto-refresh) ==================== */
+
+.live-indicator {
+    color: #00ba7c;
+    font-size: 13px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    letter-spacing: 0.3px;
+}
+.live-indicator::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #00ba7c;
+    display: inline-block;
+    animation: livePulse 1.6s ease-in-out infinite;
+}
+@keyframes livePulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.3; transform: scale(0.8); }
+}

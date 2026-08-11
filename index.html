@@ -267,7 +267,7 @@
             <div class="post-list">
                 <div class="post-list-header">
                     <h2>Publicaciones</h2>
-                    <button onclick="loadPosts()" class="refresh-btn">Actualizar</button>
+                    <span id="liveIndicator" class="live-indicator">En vivo</span>
                 </div>
                 
                 <div id="loadingContainer" class="loading-container hidden">
@@ -278,7 +278,6 @@
                 <div id="emptyState" class="empty-state hidden">
                     <h3>No hay publicaciones aún</h3>
                     <p>Sé el primero en compartir algo</p>
-                    <button onclick="loadPosts()" class="refresh-btn">Actualizar</button>
                 </div>
                 
                 <div id="postsContainer" class="posts-container">
