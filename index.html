@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AnonPosts - Publicaciones Anónimas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <h1 class="logo">AnonPosts</h1>
+            <div class="header-actions">
+                <span id="currentUser" class="current-user hidden"></span>
+                <button id="newPostBtn" class="new-post-btn hidden" onclick="showPostForm()">Nueva Publicación</button>
+                <button id="logoutBtn" class="logout-btn hidden" onclick="logout()">Cerrar Sesión</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="container">
+            <!-- Pantalla de inicio (Landing Page) -->
+            <div id="landingPage" class="landing-page">
+                <div class="landing-content">
+                    <div class="landing-header">
+                        <h1>🎭 AnonPosts</h1>
+                        <p class="tagline">Comparte libremente, sin límites ni juicios</p>
+                    </div>
+                    
+                    <div class="landing-description">
+                        <h2>¿Qué es AnonPosts?</h2>
+                        <p>Esta es una plataforma dedicada a <strong>publicaciones completamente anónimas</strong> donde puedes compartir lo que piensas, sientes o quieres expresar sin revelar tu identidad.</p>
+                        
+                        <div class="features">
+                            <div class="feature">
+                                <span class="feature-icon">🔒</span>
+                                <div class="feature-text">
+                                    <h3>Totalmente Anónimo</h3>
+                                    <p>Sin correos, sin datos personales. Solo un código único para acceder.</p>
+                                </div>
+                            </div>
+                            
+                            <div class="feature">
+                                <span class="feature-icon">💬</span>
+                                <div class="feature-text">
+                                    <h3>Libertad de Expresión</h3>
+                                    <p>Comparte pensamientos, experiencias o cualquier cosa que quieras decir.</p>
+                                </div>
+                            </div>
+                            
+                            <div class="feature">
+                                <span class="feature-icon">🌟</span>
+                                <div class="feature-text">
+                                    <h3>Comunidad Respetuosa</h3>
+                                    <p>Respetamos la libertad, pero mantenemos normas básicas de convivencia.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="important-notice">
+                            <h3>⚠️ Importante</h3>
+                            <p>Aunque valoramos la libertad de expresión, <strong>debes respetar ciertas normas básicas</strong>. El contenido ilegal, difamatorio o que cause daño será removido. Usa esta plataforma de manera responsable.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="landing-actions">
+                        <button class="primary-btn" onclick="showTermsPage()">Comenzar</button>
+                        <p class="legal-note">Al continuar, aceptarás nuestros términos y condiciones</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pantalla de Términos y Condiciones -->
+            <div id="termsPage" class="terms-page hidden">
+                <div class="terms-content">
+                    <div class="terms-header">
+                        <button class="back-btn" onclick="showLandingPage()">← Volver</button>
+                        <h2>Términos y Condiciones</h2>
+                        <p class="terms-subtitle">Por favor, lee cuidadosamente antes de continuar</p>
+                    </div>
+                    
+                    <div class="terms-text">
+                        <div class="terms-section">
+                            <h3>1. Uso del Servicio</h3>
+                            <p>AnonPosts es una plataforma de publicaciones anónimas. Al usar este servicio, reconoces que:</p>
+                            <ul>
+                                <li>El uso de esta plataforma es <strong>completamente bajo tu responsabilidad</strong></li>
+                                <li>Eres mayor de edad o tienes autorización para usar este servicio</li>
+                                <li>No utilizarás la plataforma para actividades ilegales o dañinas</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="terms-section">
+                            <h3>2. Limitación de Responsabilidad</h3>
+                            <p>Al usar AnonPosts, <strong>renuncias expresamente a demandar o responsabilizar</strong> a la plataforma, su creador o administradores por:</p>
+                            <ul>
+                                <li>Cualquier incidente, daño o consecuencia derivada del uso del servicio</li>
+                                <li>Contenido publicado por otros usuarios</li>
+                                <li>Pérdida de datos, códigos de acceso o información</li>
+                                <li>Interrupciones del servicio o problemas técnicos</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="terms-section">
+                            <h3>3. Contenido de Usuarios</h3>
+                            <p><strong>El creador de AnonPosts NO se hace responsable</strong> del contenido que publiquen los usuarios. Sin embargo:</p>
+                            <ul>
+                                <li>Nos comprometemos a eliminar contenido claramente ilegal cuando sea reportado</li>
+                                <li>Aplicamos filtros automáticos para contenido ofensivo</li>
+                                <li>La moderación se hace por esfuerzo, no por obligación estricta</li>
+                                <li>Los usuarios son únicos responsables de lo que publican</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="terms-section">
+                            <h3>4. Códigos de Acceso</h3>
+                            <p>Tu código de acceso es tu única forma de ingresar. <strong>Si lo pierdes, no podrás recuperar tu cuenta</strong>. No ofrecemos servicios de recuperación de códigos.</p>
+                        </div>
+                        
+                        <div class="terms-section highlight">
+                            <h3>5. Aceptación</h3>
+                            <p>Al marcar la casilla y continuar, confirmas que:</p>
+                            <ul>
+                                <li><strong>Has leído y entendido estos términos</strong></li>
+                                <li><strong>Aceptas usar el servicio bajo tu propia responsabilidad</strong></li>
+                                <li><strong>Renuncias a cualquier reclamación legal contra la plataforma</strong></li>
+                                <li><strong>Usarás la plataforma de manera responsable y legal</strong></li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="terms-acceptance">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="acceptTerms" required>
+                            <span class="checkmark"></span>
+                            <span class="checkbox-text">He leído y acepto los términos y condiciones. Entiendo que uso este servicio bajo mi propia responsabilidad.</span>
+                        </label>
+                        
+                        <div class="terms-actions">
+                            <button class="secondary-btn" onclick="showLandingPage()">Cancelar</button>
+                            <button class="primary-btn" id="continueBtn" onclick="proceedToAuth()" disabled>Aceptar y Continuar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pantalla de autenticación -->
+            <div id="authScreen" class="auth-screen hidden">
+                <!-- Formulario de login -->
+                <div id="loginForm" class="auth-form">
+                    <div class="auth-header">
+                        <h2>Iniciar Sesión</h2>
+                        <p class="auth-description">Ingresa tu código de acceso para continuar</p>
+                    </div>
+                    
+                    <form id="loginUserForm">
+                        <div class="form-group">
+                            <label for="accessCode">Código de Acceso:</label>
+                            <input type="text" id="accessCode" name="accessCode" placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="19" required>
+                            <small class="input-help">Formato: XXXX-XXXX-XXXX-XXXX</small>
+                        </div>
+                        
+                        <div id="loginErrorMessage" class="error-message hidden"></div>
+                        
+                        <div class="form-actions">
+                            <button type="submit" class="submit-btn">Iniciar Sesión</button>
+                            <button type="button" class="secondary-btn" onclick="showRegisterForm()">¿No tienes cuenta? Crear una</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Formulario de registro -->
+                <div id="registerForm" class="auth-form hidden">
+                    <div class="auth-header">
+                        <h2>Crear Cuenta</h2>
+                        <p class="auth-description">Elige un nombre de usuario para comenzar</p>
+                    </div>
+                    
+                    <form id="createUserForm">
+                        <div class="form-group">
+                            <label for="username">Nombre de Usuario:</label>
+                            <input type="text" id="username" name="username" placeholder="Tu alias o nickname..." maxlength="30" minlength="3" required>
+                            <small class="input-help">Entre 3 y 30 caracteres. Puede ser tu alias o nickname.</small>
+                        </div>
+                        
+                        <div id="userErrorMessage" class="error-message hidden"></div>
+                        
+                        <div class="form-actions">
+                            <button type="submit" class="submit-btn">Crear Cuenta</button>
+                            <button type="button" class="secondary-btn" onclick="showLoginForm()">¿Ya tienes cuenta? Iniciar sesión</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Modal de código generado -->
+                <div id="accessCodeModal" class="access-code-modal hidden">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3>¡Cuenta creada exitosamente! 🎉</h3>
+                        </div>
+                        <div class="modal-body">
+                            <div class="access-code-display">
+                                <label>Tu Código de Acceso Único:</label>
+                                <div class="code-container">
+                                    <input type="text" id="generatedCode" readonly class="generated-code" aria-label="Código de acceso generado">
+                                    <button type="button" class="copy-btn" onclick="copyAccessCode()">📋 Copiar</button>
+                                </div>
+                            </div>
+                            
+                            <div class="important-message">
+                                <h4>⚠️ IMPORTANTE - Lee esto cuidadosamente:</h4>
+                                <ul>
+                                    <li><strong>Copia y guarda este código</strong> en un lugar seguro (notas del teléfono, papel, etc.)</li>
+                                    <li><strong>Este código es tu única forma de acceder</strong> a tu cuenta en el futuro</li>
+                                    <li><strong>No necesitas correo ni contraseña</strong>, solo este código</li>
+                                    <li><strong>Si pierdes este código, no podrás recuperar tu cuenta</strong></li>
+                                    <li>Para entrar la próxima vez, simplemente pega este código en la pantalla de inicio</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="modal-actions">
+                            <button type="button" class="submit-btn" onclick="confirmCodeSaved()">Ya copié mi código, continuar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Formulario de nueva publicación -->
+            <div id="postForm" class="post-form hidden">
+                <div class="post-form-header">
+                    <h2>Nueva Publicación</h2>
+                    <button class="close-btn" onclick="hidePostForm()">×</button>
+                </div>
+                
+                <form id="newPostForm" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <input type="text" id="postTitle" name="title" placeholder="Título de tu publicación..." maxlength="200" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <textarea id="postDescription" name="description" placeholder="¿Qué quieres compartir?" maxlength="2000" rows="4" required></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="file-label">
+                            <input type="file" id="postImages" accept="image/*" multiple class="file-input">
+                            <span class="file-text" id="fileText">Agregar imágenes (máximo 5)</span>
+                        </label>
+                        <div id="imagePreviewContainer" class="image-preview-container"></div>
+                    </div>
+                    
+                    <div id="errorMessage" class="error-message hidden"></div>
+                    
+                    <div class="form-actions">
+                        <button type="button" onclick="hidePostForm()" class="cancel-btn">Cancelar</button>
+                        <button type="submit" class="submit-btn">Publicar</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Lista de publicaciones -->
+            <div class="post-list">
+                <div class="post-list-header">
+                    <h2>Publicaciones</h2>
+                    <button onclick="loadPosts()" class="refresh-btn">Actualizar</button>
+                </div>
+                
+                <div id="loadingContainer" class="loading-container hidden">
+                    <div class="loading-spinner"></div>
+                    <p>Cargando publicaciones...</p>
+                </div>
+                
+                <div id="emptyState" class="empty-state hidden">
+                    <h3>No hay publicaciones aún</h3>
+                    <p>Sé el primero en compartir algo</p>
+                    <button onclick="loadPosts()" class="refresh-btn">Actualizar</button>
+                </div>
+                
+                <div id="postsContainer" class="posts-container">
+                    <!-- Las publicaciones se cargarán aquí dinámicamente -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
