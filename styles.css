@@ -1159,3 +1159,18 @@ img, video { max-width: 100%; height: auto; }
     .logo { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .admin-panel-btn, .new-post-btn, .logout-btn { padding: 7px 12px; font-size: 13px; }
 }
+
+
+/* Botón de cerrar sesión como icono (SVG de salida) */
+.logout-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    padding: 0 !important;
+    border-radius: 50%;
+    color: #71767b;
+}
+.logout-icon-btn svg { display: block; }
+.logout-icon-btn:hover { background: #333333; color: #ffffff; }
