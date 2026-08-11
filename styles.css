@@ -1407,3 +1407,27 @@ img, video { max-width: 100%; height: auto; }
 .chat-reply-preview { font-size: 12px; color: #8b98a5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chat-reply-cancel { background: none; border: none; color: #71767b; cursor: pointer; font-size: 14px; flex-shrink: 0; }
 .chat-reply-cancel:hover { color: #fff; }
+
+
+/* Contador de mensajes no leídos en el botón flotante del chat */
+.chat-fab { position: fixed; } /* asegura contexto para el badge */
+.chat-fab-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    background: #f4212e;
+    color: #ffffff;
+    border: 2px solid #000000;
+    border-radius: 11px;
+    font-size: 12px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}
+.chat-fab-badge.hidden { display: none; }

@@ -452,6 +452,7 @@ function showUserInterface() {
 
     const chatFab = document.getElementById('chatFab');
     if (chatFab) chatFab.classList.remove('hidden');
+    startUnreadPoller(); // Contador de mensajes no leídos
 }
 
 function logout() {
@@ -462,6 +463,7 @@ function logout() {
     // Ocultar y cerrar el chat
     const chatFab = document.getElementById('chatFab');
     if (chatFab) chatFab.classList.add('hidden');
+    updateChatBadge(0);
     closeChat();
     // Mantener términos aceptados para no tener que aceptarlos de nuevo
     showAuthScreen();
@@ -4686,6 +4688,8 @@ async function loadChatMessages(force = false) {
         const response = await fetch('/api/chat');
         if (!response.ok) return;
         const messages = await response.json();
+        // El chat está abierto → marcar todo como leído (quita el badge)
+        markChatRead(messages);
         const sig = chatSignature(messages);
         if (!force && sig === lastChatSignature) return; // nada nuevo → no re-dibujar
         lastChatSignature = sig;
@@ -4825,4 +4829,56 @@ async function deleteChatMessage(id) {
     } catch (error) {
         showToast(error.message, 'error');
     }
+}
+
+// ---- Contador de mensajes no leídos en el botón flotante ----
+
+let unreadPollTimer = null;
+
+function updateChatBadge(count) {
+    const badge = document.getElementById('chatBadge');
+    if (!badge) return;
+    if (count > 0) {
+        badge.textContent = count > 99 ? '99+' : String(count);
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
+}
+
+// Marca todos los mensajes como leídos (guarda el más reciente visto)
+function markChatRead(messages) {
+    if (messages && messages.length) {
+        localStorage.setItem('chatLastSeen', messages[messages.length - 1].createdAt);
+    }
+    updateChatBadge(0);
+}
+
+// Revisa (en segundo plano) cuántos mensajes no leídos hay
+async function checkUnreadChat() {
+    if (!currentUser) return;
+    const modal = document.getElementById('chatModal');
+    const chatOpen = modal && !modal.classList.contains('hidden');
+    try {
+        const response = await fetch('/api/chat');
+        if (!response.ok) return;
+        const messages = await response.json();
+        if (chatOpen) { // lo está leyendo → marcar todo como leído
+            markChatRead(messages);
+            return;
+        }
+        const lastSeen = localStorage.getItem('chatLastSeen');
+        const lastSeenTime = lastSeen ? new Date(lastSeen).getTime() : 0;
+        const unread = messages.filter(m =>
+            new Date(m.createdAt).getTime() > lastSeenTime &&
+            (!m.userId || m.userId._id !== currentUser._id) // no contar los míos
+        ).length;
+        updateChatBadge(unread);
+    } catch (e) { /* silencioso */ }
+}
+
+function startUnreadPoller() {
+    checkUnreadChat();
+    if (unreadPollTimer) return;
+    unreadPollTimer = setInterval(checkUnreadChat, 6000); // cada 6s
 }
