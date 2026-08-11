@@ -1330,6 +1330,14 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
   }
 });
 
+// Digital Asset Links: permite que la APK (TWA) verifique el dominio y oculte la barra de URL
+app.get('/.well-known/assetlinks.json', (req, res) => {
+  res.type('application/json');
+  res.sendFile(path.join(__dirname, 'assetlinks.json'), (err) => {
+    if (err) res.status(404).json({ error: 'assetlinks.json aún no configurado' });
+  });
+});
+
 // Ruta principal para servir la aplicación HTML
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));

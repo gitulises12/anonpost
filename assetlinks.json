@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.onrender.anonpost_vbsz.twa",
+    "sha256_cert_fingerprints": ["49:75:37:E7:97:33:08:59:E8:42:19:1F:5F:24:DE:94:E1:35:B2:65:E7:94:83:61:D0:71:E7:4B:40:4B:9F:F1"]
+  }
+}]
